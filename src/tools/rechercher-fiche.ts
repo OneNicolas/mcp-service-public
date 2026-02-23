@@ -45,7 +45,7 @@ export async function rechercherFiche(
         content: [
           {
             type: "text",
-            text: `Aucune fiche trouv\u00e9e pour "${query}". Essayez des termes diff\u00e9rents.`,
+            text: `Aucune fiche trouvée pour "${query}". Essayez des termes différents.`,
           },
         ],
       };
@@ -54,14 +54,14 @@ export async function rechercherFiche(
     const formatted = results.results.map((r: Record<string, unknown>) => {
       const parts = [`## ${r.titre}`, `**ID** : ${r.id}`];
       if (r.description) parts.push(`${r.description}`);
-      if (r.theme_titre) parts.push(`**Th\u00e8me** : ${r.theme_titre}`);
+      if (r.theme_titre) parts.push(`**Thème** : ${r.theme_titre}`);
       if (r.dossier_titre) parts.push(`**Dossier** : ${r.dossier_titre}`);
       if (r.url) parts.push(`**URL** : ${r.url}`);
       return parts.join("\n");
     });
 
     const text = [
-      `**${results.results.length} fiche(s) trouv\u00e9e(s) pour "${query}"**\n`,
+      `**${results.results.length} fiche(s) trouvée(s) pour "${query}"**\n`,
       ...formatted,
     ].join("\n---\n");
 

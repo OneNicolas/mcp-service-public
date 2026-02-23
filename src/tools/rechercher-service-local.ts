@@ -61,7 +61,7 @@ export async function rechercherServiceLocal(
 
     if (!data.results?.length) {
       return {
-        content: [{ type: "text", text: "Aucun organisme trouv\u00e9. Essayez des crit\u00e8res diff\u00e9rents." }],
+        content: [{ type: "text", text: "Aucun organisme trouvé. Essayez des critères différents." }],
       };
     }
 
@@ -72,7 +72,7 @@ export async function rechercherServiceLocal(
         {
           type: "text",
           text: [
-            `**${data.total_count} organisme(s) trouv\u00e9(s)** (${data.results.length} affich\u00e9s)\n`,
+            `**${data.total_count} organisme(s) trouvé(s)** (${data.results.length} affichés)\n`,
             ...formatted,
           ].join("\n---\n"),
         },
@@ -95,12 +95,14 @@ function formatOrganisme(record: AnnuaireRecord): string {
   const f = record;
   const sections: string[] = [`## ${f.nom || "Organisme"}`];
 
+  // Type
   if (f.pivot) {
     const pivots = safeParseArray(f.pivot);
     const types = pivots.map((p: { type_service_local?: string }) => p.type_service_local).filter(Boolean);
     if (types.length) sections.push(`**Type** : ${types.join(", ")}`);
   }
 
+  // Address
   if (f.adresse) {
     const addrs = safeParseArray(f.adresse);
     for (const addr of addrs) {
@@ -110,22 +112,26 @@ function formatOrganisme(record: AnnuaireRecord): string {
     }
   }
 
+  // Phone
   if (f.telephone) {
     const phones = safeParseArray(f.telephone);
     const numbers = phones.map((p: { valeur?: string }) => p.valeur).filter(Boolean);
-    if (numbers.length) sections.push(`**T\u00e9l\u00e9phone** : ${numbers.join(", ")}`);
+    if (numbers.length) sections.push(`**Téléphone** : ${numbers.join(", ")}`);
   }
 
+  // Email
   if (f.adresse_courriel) {
     sections.push(`**Email** : ${f.adresse_courriel}`);
   }
 
+  // Website
   if (f.site_internet) {
     const sites = safeParseArray(f.site_internet);
     const urls = sites.map((s: { valeur?: string }) => s.valeur).filter(Boolean);
     if (urls.length) sections.push(`**Site** : ${urls.join(", ")}`);
   }
 
+  // Opening hours
   if (f.plage_ouverture) {
     const horaires = safeParseArray(f.plage_ouverture);
     if (horaires.length) {
@@ -145,10 +151,11 @@ function formatOrganisme(record: AnnuaireRecord): string {
     }
   }
 
+  // Geolocation
   if (f.geocodage) {
     const geo = typeof f.geocodage === "string" ? JSON.parse(f.geocodage) : f.geocodage;
     if (geo?.lat && geo?.lon) {
-      sections.push(`**Coordonn\u00e9es** : ${geo.lat}, ${geo.lon}`);
+      sections.push(`**Coordonnées** : ${geo.lat}, ${geo.lon}`);
     }
   }
 

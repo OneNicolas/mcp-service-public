@@ -16,19 +16,19 @@ export class ServicePublicMcp extends McpAgent<Env> {
   async init() {
     this.server.tool(
       "rechercher_fiche",
-      "Recherche dans les fiches pratiques de service-public.fr (droits, d\u00e9marches administratives). Utilise la recherche plein texte.",
+      "Recherche dans les fiches pratiques de service-public.fr (droits, démarches administratives). Utilise la recherche plein texte.",
       {
         query: z.string().describe("Termes de recherche (ex: 'passeport', 'allocation logement', 'permis de conduire')"),
-        theme: z.string().optional().describe("Filtrer par th\u00e8me (ex: 'Papiers', 'Logement', 'Travail')"),
+        theme: z.string().optional().describe("Filtrer par thème (ex: 'Papiers', 'Logement', 'Travail')"),
         audience: z.enum(["Particuliers", "Professionnels", "Associations"]).optional().describe("Public cible"),
-        limit: z.number().min(1).max(20).default(10).optional().describe("Nombre de r\u00e9sultats"),
+        limit: z.number().min(1).max(20).default(10).optional().describe("Nombre de résultats"),
       },
       async (args) => rechercherFiche(args, this.env),
     );
 
     this.server.tool(
       "lire_fiche",
-      "Lit le contenu complet d'une fiche pratique par son identifiant (ex: F14929 pour le passeport). Inclut le texte, les services en ligne, les r\u00e9f\u00e9rences l\u00e9gales et les liens.",
+      "Lit le contenu complet d'une fiche pratique par son identifiant (ex: F14929 pour le passeport). Inclut le texte, les services en ligne, les références légales et les liens.",
       {
         fiche_id: z.string().describe("Identifiant de la fiche (ex: F14929, N360, R42946)"),
       },
@@ -37,22 +37,22 @@ export class ServicePublicMcp extends McpAgent<Env> {
 
     this.server.tool(
       "rechercher_service_local",
-      "Recherche un service public local (mairie, pr\u00e9fecture, CAF, CPAM, France Services...) via l'Annuaire de l'administration.",
+      "Recherche un service public local (mairie, préfecture, CAF, CPAM, France Services...) via l'Annuaire de l'administration.",
       {
         type_organisme: z.string().optional().describe("Type de service (ex: 'mairie', 'prefecture', 'caf', 'cpam', 'france_services', 'tribunal')"),
         code_postal: z.string().optional().describe("Code postal (ex: '75001')"),
         commune: z.string().optional().describe("Nom de la commune"),
         code_insee: z.string().optional().describe("Code INSEE de la commune"),
-        limit: z.number().min(1).max(20).default(5).optional().describe("Nombre de r\u00e9sultats"),
+        limit: z.number().min(1).max(20).default(5).optional().describe("Nombre de résultats"),
       },
       async (args) => rechercherServiceLocal(args),
     );
 
     this.server.tool(
       "naviguer_themes",
-      "Parcourt l'arborescence th\u00e9matique de service-public.fr. Sans param\u00e8tre, liste les th\u00e8mes principaux. Avec un ID, affiche les sous-cat\u00e9gories et fiches associ\u00e9es.",
+      "Parcourt l'arborescence thématique de service-public.fr. Sans paramètre, liste les thèmes principaux. Avec un ID, affiche les sous-catégories et fiches associées.",
       {
-        theme_id: z.string().optional().describe("ID du th\u00e8me \u00e0 explorer (ex: N19810, N360)"),
+        theme_id: z.string().optional().describe("ID du thème à explorer (ex: N19810, N360)"),
       },
       async (args) => naviguerThemes(args, this.env),
     );
@@ -74,7 +74,7 @@ export default {
     if (url.pathname === "/") {
       return Response.json({
         name: "mcp-service-public",
-        description: "MCP Server pour les donn\u00e9es de service-public.fr",
+        description: "MCP Server pour les données de service-public.fr",
         mcp_endpoint: "/mcp",
         transport: "streamable-http",
         tools: [
@@ -87,7 +87,7 @@ export default {
       });
     }
 
-    // All other paths -> McpAgent Durable Object
+    // All other paths → McpAgent Durable Object
     return (env as Record<string, DurableObjectNamespace>).MCP_OBJECT
       .get((env as Record<string, DurableObjectNamespace>).MCP_OBJECT.idFromName("default"))
       .fetch(request);

@@ -106,7 +106,7 @@ function extractThemeId(root: Record<string, unknown>): string | null {
   if (!niveau) return null;
   const items = Array.isArray(niveau) ? niveau : [niveau];
   for (const n of items) {
-    if (n["@_type"] === "Th\u00e8me" || n["@_type"] === "Theme") {
+    if (n["@_type"] === "Thème" || n["@_type"] === "Theme") {
       return extractText(n["@_ID"]) || null;
     }
   }
@@ -120,7 +120,7 @@ function extractThemeTitre(root: Record<string, unknown>): string | null {
   if (!niveau) return null;
   const items = Array.isArray(niveau) ? niveau : [niveau];
   for (const n of items) {
-    if (n["@_type"] === "Th\u00e8me" || n["@_type"] === "Theme") {
+    if (n["@_type"] === "Thème" || n["@_type"] === "Theme") {
       return extractText(n["#text"]) || extractText(n["Titre"]) || null;
     }
   }
@@ -134,7 +134,7 @@ function extractSousTheme(root: Record<string, unknown>): string | null {
   if (!niveau) return null;
   const items = Array.isArray(niveau) ? niveau : [niveau];
   for (const n of items) {
-    if (n["@_type"] === "Sous-th\u00e8me") {
+    if (n["@_type"] === "Sous-thème") {
       return extractText(n["#text"]) || extractText(n["Titre"]) || null;
     }
   }
