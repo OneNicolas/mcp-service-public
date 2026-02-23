@@ -17,7 +17,7 @@ new_classes = ["ServicePublicMcp"]
 [[d1_databases]]
 binding = "DB"
 database_name = "service-public-db"
-database_id = "" # Set after `wrangler d1 create service-public-db`
+database_id = "91451f1f-61ba-4aef-b152-c725b4ac99e5"
 
 # Cron trigger for daily DILA data sync
 [triggers]
