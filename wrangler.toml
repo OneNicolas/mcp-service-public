@@ -11,7 +11,7 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["ServicePublicMcp"]
+new_sqlite_classes = ["ServicePublicMcp"]
 
 # D1 database for fiches index
 [[d1_databases]]
