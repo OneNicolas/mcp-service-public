@@ -1,0 +1,24 @@
+name = "mcp-service-public"
+main = "src/index.ts"
+compatibility_date = "2025-02-20"
+compatibility_flags = ["nodejs_compat"]
+
+# Durable Object for MCP session management
+[durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "ServicePublicMcp" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ServicePublicMcp"]
+
+# D1 database for fiches index
+[[d1_databases]]
+binding = "DB"
+database_name = "service-public-db"
+database_id = "" # Set after `wrangler d1 create service-public-db`
+
+# Cron trigger for daily DILA data sync
+[triggers]
+crons = ["0 6 * * *"]
