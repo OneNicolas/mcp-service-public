@@ -6,6 +6,7 @@ import { rechercherFiche } from "./tools/rechercher-fiche.js";
 import { lireFiche } from "./tools/lire-fiche.js";
 import { rechercherServiceLocal } from "./tools/rechercher-service-local.js";
 import { naviguerThemes } from "./tools/naviguer-themes.js";
+import { syncDila } from "./sync/dila-sync.js";
 
 export class ServicePublicMcp extends McpAgent<Env> {
   server = new McpServer({
@@ -60,9 +61,10 @@ export class ServicePublicMcp extends McpAgent<Env> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    // Health check
     if (url.pathname === "/health") {
       return Response.json({
         status: "ok",
@@ -71,6 +73,7 @@ export default {
       });
     }
 
+    // Service description
     if (url.pathname === "/") {
       return Response.json({
         name: "mcp-service-public",
@@ -87,16 +90,63 @@ export default {
       });
     }
 
+    // Manual sync trigger (protected)
+    if (url.pathname === "/admin/sync" && request.method === "POST") {
+      const token = request.headers.get("Authorization")?.replace("Bearer ", "");
+      if (!env.ADMIN_SECRET || token !== env.ADMIN_SECRET) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      // Run sync in background, return immediately
+      ctx.waitUntil(
+        syncDila(env).then((result) => {
+          console.log("Admin sync completed:", JSON.stringify(result));
+        }).catch((error) => {
+          console.error("Admin sync failed:", error);
+        }),
+      );
+
+      return Response.json(
+        { status: "started", message: "Sync démarré en arrière-plan" },
+        { status: 202 },
+      );
+    }
+
+    // Sync status
+    if (url.pathname === "/admin/sync" && request.method === "GET") {
+      const token = request.headers.get("Authorization")?.replace("Bearer ", "");
+      if (!env.ADMIN_SECRET || token !== env.ADMIN_SECRET) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      const logs = await env.DB.prepare(
+        `SELECT * FROM sync_log ORDER BY id DESC LIMIT 5`,
+      ).all();
+
+      const count = await env.DB.prepare(
+        `SELECT COUNT(*) as total FROM fiches`,
+      ).first<{ total: number }>();
+
+      return Response.json({
+        fiches_in_db: count?.total ?? 0,
+        recent_syncs: logs.results,
+      });
+    }
+
     // All other paths → McpAgent Durable Object
     return (env as Record<string, DurableObjectNamespace>).MCP_OBJECT
       .get((env as Record<string, DurableObjectNamespace>).MCP_OBJECT.idFromName("default"))
       .fetch(request);
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-    console.log("Starting daily DILA sync...");
-    await env.DB.prepare(
-      `INSERT INTO sync_log (started_at, status) VALUES (datetime('now'), 'not_implemented')`,
-    ).run();
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    console.log("Cron: starting daily DILA sync...");
+    ctx.waitUntil(
+      syncDila(env).then((result) => {
+        console.log("Cron sync completed:", JSON.stringify(result));
+      }).catch((error) => {
+        console.error("Cron sync failed:", error);
+      }),
+    );
   },
 };

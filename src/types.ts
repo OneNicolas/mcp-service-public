@@ -2,6 +2,7 @@
 export interface Env {
   DB: D1Database;
   MCP_OBJECT: DurableObjectNamespace;
+  ADMIN_SECRET: string;
 }
 
 /** Fiche pratique stored in D1 */

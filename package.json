@@ -8,13 +8,13 @@
     "deploy": "wrangler deploy",
     "db:init": "wrangler d1 execute service-public-db --local --file=./schema.sql",
     "db:init:remote": "wrangler d1 execute service-public-db --remote --file=./schema.sql",
-    "sync": "wrangler dispatch mcp-service-public sync",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "agents": "^0.0.80",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "fast-xml-parser": "^5.2.0",
+    "fflate": "^0.8.2",
     "zod": "^3.25.0"
   },
   "devDependencies": {
