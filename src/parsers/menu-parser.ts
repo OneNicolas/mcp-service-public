@@ -5,13 +5,12 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   textNodeName: "#text",
-  isArray: (tagName) =>
-    ["Theme", "SousTheme", "Dossier", "SousDossier", "Fiche"].includes(tagName),
+  isArray: (tagName) => ["ItemMenu"].includes(tagName),
 });
 
 /**
  * Parse menu.xml from the DILA archive into a flat list of Theme nodes.
- * The XML has a nested hierarchy: Arborescence > Theme > SousTheme > Dossier > SousDossier
+ * The XML uses: Menu > ItemMenu[type="Theme"] > ItemMenu[type="Sous-theme"] > ItemMenu[type="Dossier"]
  * We flatten it into a parent_id-based structure for D1.
  */
 export function parseMenu(xml: string): Theme[] {
@@ -19,16 +18,12 @@ export function parseMenu(xml: string): Theme[] {
 
   try {
     const doc = parser.parse(xml);
-    const root =
-      doc["Arborescence"] ||
-      doc["Publication"] ||
-      doc["Menu"] ||
-      doc;
+    const root = doc["Menu"];
+    if (!root) return themes;
 
-    // Top-level themes
-    const topThemes = ensureArray(root["Theme"]);
-    for (const theme of topThemes) {
-      processNode(theme, "theme", null, themes);
+    const items = ensureArray(root["ItemMenu"]);
+    for (const item of items) {
+      processNode(item, null, themes);
     }
   } catch (error) {
     console.error("menu-parser: failed to parse menu.xml", error);
@@ -39,12 +34,14 @@ export function parseMenu(xml: string): Theme[] {
 
 function processNode(
   node: Record<string, unknown>,
-  type: string,
   parentId: string | null,
   out: Theme[],
 ): void {
   const id = extractAttr(node, "ID");
   if (!id) return;
+
+  const rawType = extractAttr(node, "type") || "theme";
+  const type = normalizeType(rawType);
 
   const titre =
     extractText(node["Titre"]) ||
@@ -53,16 +50,18 @@ function processNode(
 
   out.push({ id, type, titre, parent_id: parentId });
 
-  // Recurse into children
-  for (const sousTheme of ensureArray(node["SousTheme"])) {
-    processNode(sousTheme, "sous-theme", id, out);
+  for (const child of ensureArray(node["ItemMenu"])) {
+    processNode(child, id, out);
   }
-  for (const dossier of ensureArray(node["Dossier"])) {
-    processNode(dossier, "dossier", id, out);
-  }
-  for (const sousDossier of ensureArray(node["SousDossier"])) {
-    processNode(sousDossier, "sous-dossier", id, out);
-  }
+}
+
+function normalizeType(raw: string): string {
+  const lower = raw.toLowerCase();
+  if (lower === "theme") return "theme";
+  if (lower.includes("sous-theme")) return "sous-theme";
+  if (lower === "sous-dossier") return "sous-dossier";
+  if (lower === "dossier") return "dossier";
+  return raw;
 }
 
 function ensureArray(value: unknown): Record<string, unknown>[] {
@@ -72,7 +71,7 @@ function ensureArray(value: unknown): Record<string, unknown>[] {
 }
 
 function extractAttr(node: Record<string, unknown>, attr: string): string | null {
-  const val = node[`@_${attr}`];
+  const val = node["@_" + attr];
   if (typeof val === "string") return val;
   if (typeof val === "number") return String(val);
   return null;
