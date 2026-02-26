@@ -4,13 +4,14 @@ import { resolveCodePostal, resolveNomCommune } from "../utils/geo-api.js";
 const DVF_RESOURCE_ID = "d7933994-2c66-4131-a4da-cf7cd18040a4";
 const TABULAR_API = `https://tabular-api.data.gouv.fr/api/resources/${DVF_RESOURCE_ID}/data/`;
 const MAX_PAGE_SIZE = 200;
-const MAX_PAGES = 15; // 3000 records max
+const MAX_PAGES_NORMAL = 15; // communes classiques
+const MAX_PAGES_PLM = 3;    // par arrondissement PLM (limiter la charge)
 
-// Paris, Lyon, Marseille : le code commune INSEE unique est éclaté en arrondissements dans DVF
+// Paris, Lyon, Marseille : code INSEE unique → arrondissements DVF
 const PLM_ARRONDISSEMENTS: Record<string, string[]> = {
-  "75056": Array.from({ length: 20 }, (_, i) => `751${String(i + 1).padStart(2, "0")}`),   // 75101–75120
-  "69123": Array.from({ length: 9 }, (_, i) => `6938${i + 1}`),                             // 69381–69389
-  "13055": Array.from({ length: 16 }, (_, i) => `132${String(i + 1).padStart(2, "0")}`),    // 13201–13216
+  "75056": Array.from({ length: 20 }, (_, i) => `751${String(i + 1).padStart(2, "0")}`),
+  "69123": Array.from({ length: 9 }, (_, i) => `6938${i + 1}`),
+  "13055": Array.from({ length: 16 }, (_, i) => `132${String(i + 1).padStart(2, "0")}`),
 };
 
 interface ConsulterTransactionsArgs {
@@ -67,8 +68,10 @@ export async function consulterTransactionsImmobilieres(
       };
     }
 
-    // Expansion des arrondissements PLM
+    // Détecte si c'est une ville PLM
+    const isPLM = codeInseeList.some((c) => PLM_ARRONDISSEMENTS[c]);
     const expandedCodes = expandPLM(codeInseeList);
+    const maxPages = isPLM ? MAX_PAGES_PLM : MAX_PAGES_NORMAL;
 
     // Période : 2 dernières années par défaut ou année spécifique
     const dateMin = annee
@@ -78,20 +81,34 @@ export async function consulterTransactionsImmobilieres(
 
     const allMutations: MutationAgg[] = [];
     const communeLabels: string[] = [];
-
-    // Pour PLM, afficher le nom de la ville pas chaque arrondissement
     const plmLabel = getPLMLabel(codeInseeList);
+    const errors: string[] = [];
 
-    for (const code of expandedCodes) {
-      const { mutations, communeNom } = await fetchDvfForCommune(
-        code,
-        type_local,
-        dateMin,
-        dateMax,
-      );
-      allMutations.push(...mutations);
-      if (!plmLabel && !communeLabels.includes(`${communeNom} (${code})`)) {
-        communeLabels.push(`${communeNom} (${code})`);
+    // Pour PLM, traiter par batch de 3 arrondissements
+    if (isPLM) {
+      const batchSize = 3;
+      for (let i = 0; i < expandedCodes.length; i += batchSize) {
+        const batch = expandedCodes.slice(i, i + batchSize);
+        const results = await Promise.allSettled(
+          batch.map((code) => fetchDvfForCommune(code, type_local, dateMin, dateMax, maxPages)),
+        );
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            allMutations.push(...r.value.mutations);
+          } else {
+            errors.push(r.reason?.message ?? "erreur inconnue");
+          }
+        }
+      }
+    } else {
+      for (const code of expandedCodes) {
+        const { mutations, communeNom } = await fetchDvfForCommune(
+          code, type_local, dateMin, dateMax, maxPages,
+        );
+        allMutations.push(...mutations);
+        if (!communeLabels.includes(`${communeNom} (${code})`)) {
+          communeLabels.push(`${communeNom} (${code})`);
+        }
       }
     }
 
@@ -108,7 +125,10 @@ export async function consulterTransactionsImmobilieres(
       };
     }
 
-    const report = buildReport(allMutations, communeLabels, type_local, annee);
+    let report = buildReport(allMutations, communeLabels, type_local, annee);
+    if (errors.length > 0) {
+      report += `\n\n⚠️ ${errors.length} arrondissement(s) n'ont pas pu être interrogés (données partielles).`;
+    }
     return { content: [{ type: "text", text: report }] };
   } catch (error) {
     return {
@@ -174,6 +194,7 @@ async function fetchDvfForCommune(
   typeLocal?: string,
   dateMin?: string,
   dateMax?: string,
+  maxPages: number = MAX_PAGES_NORMAL,
 ): Promise<{ mutations: MutationAgg[]; communeNom: string; totalInApi: number }> {
   const params = new URLSearchParams({
     page: "1",
@@ -190,19 +211,19 @@ async function fetchDvfForCommune(
   let allRecords = firstPage.data ?? [];
   const communeNom = allRecords[0]?.nom_commune ?? codeInsee;
 
-  // Pages supplémentaires en parallèle
-  const hasNext = allRecords.length === MAX_PAGE_SIZE;
-  if (hasNext) {
-    const pagePromises: Promise<TabularResponse>[] = [];
-    for (let p = 2; p <= MAX_PAGES; p++) {
+  // Pages supplémentaires séquentiellement (évite surcharge API)
+  if (allRecords.length === MAX_PAGE_SIZE) {
+    for (let p = 2; p <= maxPages; p++) {
       const nextParams = new URLSearchParams(params);
       nextParams.set("page", String(p));
-      pagePromises.push(fetchPage(nextParams));
-    }
-    const results = await Promise.all(pagePromises);
-    for (const r of results) {
-      if (!r.data?.length) break;
-      allRecords = allRecords.concat(r.data);
+      try {
+        const page = await fetchPage(nextParams);
+        if (!page.data?.length) break;
+        allRecords = allRecords.concat(page.data);
+        if (page.data.length < MAX_PAGE_SIZE) break;
+      } catch {
+        break;
+      }
     }
   }
 
