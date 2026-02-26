@@ -3,7 +3,9 @@ import { rechercherFiche } from "./tools/rechercher-fiche.js";
 import { lireFiche } from "./tools/lire-fiche.js";
 import { rechercherServiceLocal } from "./tools/rechercher-service-local.js";
 import { naviguerThemes } from "./tools/naviguer-themes.js";
-import { syncDila } from "./sync/dila-sync.js";
+import { syncDilaFull } from "./sync/dila-sync.js";
+
+const VERSION = "0.2.0";
 
 // --- Tool definitions for tools/list ---
 
@@ -113,7 +115,7 @@ async function handleMcpPost(request: Request, env: Env): Promise<Response> {
       return jsonRpcResponse(body.id, {
         protocolVersion: "2025-03-26",
         capabilities: { tools: {} },
-        serverInfo: { name: "service-public", version: "0.1.0" },
+        serverInfo: { name: "service-public", version: VERSION },
       });
 
     case "notifications/initialized":
@@ -149,7 +151,7 @@ async function handleMcpPost(request: Request, env: Env): Promise<Response> {
 // --- Main fetch handler ---
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // CORS preflight
@@ -163,12 +165,24 @@ export default {
       });
     }
 
-    // Health check
+    // Health check with last sync info
     if (url.pathname === "/health") {
+      const lastSync = await env.DB.prepare(
+        `SELECT completed_at, fiches_count, status FROM sync_log WHERE status = 'completed' ORDER BY id DESC LIMIT 1`,
+      ).first<{ completed_at: string; fiches_count: number; status: string }>();
+
+      const ficheCount = await env.DB.prepare(
+        `SELECT COUNT(*) as total FROM fiches`,
+      ).first<{ total: number }>();
+
       return Response.json({
         status: "ok",
         service: "mcp-service-public",
-        version: "0.1.0",
+        version: VERSION,
+        fiches_count: ficheCount?.total ?? 0,
+        last_sync: lastSync
+          ? { completed_at: lastSync.completed_at, fiches_count: lastSync.fiches_count }
+          : null,
       });
     }
 
@@ -177,9 +191,10 @@ export default {
       return Response.json({
         name: "mcp-service-public",
         description: "MCP Server pour les données de service-public.fr",
+        version: VERSION,
         mcp_endpoint: "/mcp",
         transport: "streamable-http",
-        tools: ["rechercher_fiche", "lire_fiche", "rechercher_service_local", "naviguer_themes"],
+        tools: TOOLS.map((t) => t.name),
         source: "https://github.com/OneNicolas/mcp-service-public",
       });
     }
@@ -201,17 +216,15 @@ export default {
       return new Response(null, { status: 204 });
     }
 
-    // Manual sync trigger (protected, chunked)
-    if (url.pathname === "/admin/sync" && request.method === "POST") {
+    // Full sync trigger
+    if (url.pathname === "/admin/sync/full" && request.method === "POST") {
       const token = request.headers.get("Authorization")?.replace("Bearer ", "");
       if (!env.ADMIN_SECRET || token !== env.ADMIN_SECRET) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      const offset = parseInt(url.searchParams.get("offset") || "0", 10);
-
       try {
-        const result = await syncDila(env, offset);
+        const result = await syncDilaFull(env);
         return Response.json(result);
       } catch (error) {
         return Response.json(
@@ -245,16 +258,13 @@ export default {
     return Response.json({ error: "Not found" }, { status: 404 });
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    console.log("Cron: starting daily DILA sync...");
+  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    console.log("Cron: starting daily DILA full sync...");
     try {
-      let offset = 0;
-      while (true) {
-        const result = await syncDila(env, offset);
-        if (result.done) break;
-        offset = result.nextOffset!;
-      }
-      console.log("Cron sync completed");
+      const result = await syncDilaFull(env);
+      console.log(
+        `Cron sync done: ${result.fichesInserted} fiches, ${result.themesCount} themes in ${result.durationMs}ms`,
+      );
     } catch (error) {
       console.error("Cron sync failed:", error);
     }

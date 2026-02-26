@@ -7,85 +7,56 @@ import type { Env, Fiche } from "../types.js";
 const DILA_ZIP_URL =
   "https://lecomarquage.service-public.fr/vdd/3.4/part/zip/vosdroits-latest.zip";
 
-/** Number of fiches to insert per HTTP call */
-const CHUNK_SIZE = 1000;
-
 /** Regex matching DILA fiche/ressource/noeud filenames */
 const FICHE_PATTERN = /^[FRN]\d+\.xml$/;
 
 export interface SyncResult {
   fichesInserted: number;
-  totalParsed: number;
   themesCount: number;
   parseErrors: number;
   durationMs: number;
-  nextOffset: number | null;
-  done: boolean;
 }
 
 /**
- * Chunked DILA sync pipeline.
- * Downloads ZIP via streaming, parses all fiches, but only inserts
- * fiches from `offset` to `offset + CHUNK_SIZE`.
+ * Full DILA sync: downloads ZIP once, parses everything, inserts all.
+ * Designed for Cloudflare Workers paid plan (30s CPU budget).
  */
-export async function syncDila(env: Env, offset = 0): Promise<SyncResult> {
+export async function syncDilaFull(env: Env): Promise<SyncResult> {
   const start = Date.now();
-  const result: SyncResult = {
-    fichesInserted: 0,
-    totalParsed: 0,
-    themesCount: 0,
-    parseErrors: 0,
-    durationMs: 0,
-    nextOffset: null,
-    done: false,
-  };
-
-  const logId = offset === 0 ? await createSyncLog(env.DB) : null;
+  const logId = await createSyncLog(env.DB);
 
   try {
     const { fiches, menuXml, parseErrors } = await downloadAndParse();
-    result.totalParsed = fiches.length;
-    result.parseErrors = parseErrors;
 
-    // Insert only the current chunk
-    const chunk = fiches.slice(offset, offset + CHUNK_SIZE);
-    for (let i = 0; i < chunk.length; i += 100) {
-      await batchUpsertFiches(env.DB, chunk.slice(i, i + 100));
-    }
-    result.fichesInserted = chunk.length;
-
-    // Determine if more work remains
-    const nextOffset = offset + CHUNK_SIZE;
-    if (nextOffset < fiches.length) {
-      result.nextOffset = nextOffset;
-      result.done = false;
-    } else {
-      result.done = true;
-
-      if (menuXml) {
-        const themes = parseMenu(menuXml);
-        await batchUpsertThemes(env.DB, themes);
-        result.themesCount = themes.length;
-      }
+    // Insert fiches in batches of 100 (D1 limit)
+    for (let i = 0; i < fiches.length; i += 100) {
+      await batchUpsertFiches(env.DB, fiches.slice(i, i + 100));
     }
 
-    result.durationMs = Date.now() - start;
-
-    if (logId !== null && result.done) {
-      await completeSyncLog(env.DB, logId, fiches.length);
+    // Insert themes from menu.xml
+    let themesCount = 0;
+    if (menuXml) {
+      const themes = parseMenu(menuXml);
+      await batchUpsertThemes(env.DB, themes);
+      themesCount = themes.length;
     }
 
+    const result: SyncResult = {
+      fichesInserted: fiches.length,
+      themesCount,
+      parseErrors,
+      durationMs: Date.now() - start,
+    };
+
+    await completeSyncLog(env.DB, logId, fiches.length);
     console.log(
-      `Sync chunk [${offset}-${offset + chunk.length}/${fiches.length}]: ${chunk.length} inserted in ${result.durationMs}ms${result.done ? " (DONE)" : ""}`,
+      `Sync complete: ${fiches.length} fiches, ${themesCount} themes in ${result.durationMs}ms (${parseErrors} errors)`,
     );
     return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    result.durationMs = Date.now() - start;
-    if (logId !== null) {
-      await failSyncLog(env.DB, logId, msg);
-    }
-    console.error(`Sync failed at offset ${offset} after ${result.durationMs}ms: ${msg}`);
+    await failSyncLog(env.DB, logId, msg);
+    console.error(`Sync failed after ${Date.now() - start}ms: ${msg}`);
     throw error;
   }
 }
