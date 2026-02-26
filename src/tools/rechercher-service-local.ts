@@ -26,10 +26,11 @@ export async function rechercherServiceLocal(
       whereClauses.push(`pivot LIKE '%${sanitize(type_organisme)}%'`);
     }
     if (code_postal) {
-      whereClauses.push(`adresse LIKE '%"codePostal":"${sanitize(code_postal)}"%'`);
+      // API field is snake_case with space after colon: "code_postal": "75001"
+      whereClauses.push(`adresse LIKE '%"code_postal": "${sanitize(code_postal)}"%'`);
     }
     if (commune) {
-      whereClauses.push(`nom LIKE '%${sanitize(commune)}%' OR adresse LIKE '%${sanitize(commune)}%'`);
+      whereClauses.push(`adresse LIKE '%"nom_commune": "${sanitize(commune)}"%'`);
     }
     if (code_insee) {
       whereClauses.push(`code_insee_commune = '${sanitize(code_insee)}'`);
@@ -107,7 +108,8 @@ function formatOrganisme(record: AnnuaireRecord): string {
     const addrs = safeParseArray(f.adresse);
     for (const addr of addrs) {
       const a = addr as Record<string, string>;
-      const parts = [a.numeroVoie, a.complement1, a.nomVoie, a.codePostal, a.commune].filter(Boolean);
+      if (a.type_adresse === "Adresse postale") continue;
+      const parts = [a.numero_voie, a.complement1, a.code_postal, a.nom_commune].filter(Boolean);
       if (parts.length) sections.push(`**Adresse** : ${parts.join(" ")}`);
     }
   }
@@ -163,7 +165,7 @@ function formatOrganisme(record: AnnuaireRecord): string {
 }
 
 function sanitize(input: string): string {
-  return input.replace(/['"\\]/g, "");
+  return input.replace(/['"\\\n\r]/g, "");
 }
 
 function safeParseArray(value: unknown): Record<string, unknown>[] {
