@@ -54,8 +54,11 @@ export async function rechercher(
 function classifyQuery(query: string): QueryCategory {
   const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+  // Patterns sans \b final sur les radicaux tronqués (foncier* matche fonciere, fonciers)
   const fiscaliteLocalePatterns = [
-    /\btaux\b.*\b(fonci|habitation|teom|cfe)\b/,
+    /\btaux\b.*\bfoncier/,
+    /\btaxe\s+foncier/,
+    /\btaux\b.*\b(habitation|teom|cfe)\b/,
     /\b(taxe|taux)\b.*\b(commune|communal|local|ville)\b/,
     /\b(tfb|tfnb|teom|cfe)\b/,
     /\bfiscalite\s+locale\b/,
