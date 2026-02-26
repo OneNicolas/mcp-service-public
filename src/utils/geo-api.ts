@@ -1,4 +1,4 @@
-/** Résolution code postal → communes via geo.api.gouv.fr */
+/** Résolution code postal / nom de commune → communes via geo.api.gouv.fr */
 
 const GEO_API_BASE = "https://geo.api.gouv.fr";
 
@@ -31,4 +31,18 @@ export async function resolveCodePostal(codePostal: string): Promise<CommuneGeo[
 
   // Trier par population décroissante pour prioriser les communes principales
   return communes.sort((a, b) => (b.population ?? 0) - (a.population ?? 0));
+}
+
+/** Résout un nom de commune en code INSEE (retourne la commune la plus peuplée si homonymes) */
+export async function resolveNomCommune(nom: string): Promise<{ nom: string; code: string } | null> {
+  const cleaned = nom.trim();
+  if (!cleaned) return null;
+
+  const url = `${GEO_API_BASE}/communes?nom=${encodeURIComponent(cleaned)}&fields=nom,code&boost=population&limit=1`;
+  const response = await fetch(url);
+
+  if (!response.ok) return null;
+
+  const communes = (await response.json()) as Array<{ nom: string; code: string }>;
+  return communes.length > 0 ? communes[0] : null;
 }
