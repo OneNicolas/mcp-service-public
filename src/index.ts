@@ -7,7 +7,7 @@ import { consulterFiscaliteLocale } from "./tools/consulter-fiscalite-locale.js"
 import { rechercherDoctrineFiscale } from "./tools/rechercher-doctrine-fiscale.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 // --- Tool definitions for tools/list ---
 
@@ -68,16 +68,16 @@ const TOOLS = [
   {
     name: "consulter_fiscalite_locale",
     description:
-      "Consulte les taux d'imposition locale d'une commune (taxe foncière, taxe d'habitation, TEOM, CFE). Données REI de la DGFiP via data.economie.gouv.fr.",
+      "Consulte les taux d'imposition locale d'une commune (taxe foncière, taxe d'habitation, TEOM, CFE). Accepte un nom de commune, un code INSEE ou un code postal. Sans exercice précisé, affiche l'évolution sur 4 ans avec tendance. Données REI de la DGFiP via data.economie.gouv.fr.",
     inputSchema: {
       type: "object" as const,
       properties: {
         commune: { type: "string", description: "Nom de la commune (ex: 'PARIS', 'LYON')" },
         code_insee: { type: "string", description: "Code INSEE de la commune (ex: '75056', '69123')" },
-        exercice: { type: "string", description: "Année fiscale (ex: '2024'). Par défaut: année la plus récente." },
+        code_postal: { type: "string", description: "Code postal (ex: '93140', '75001'). Résout automatiquement vers le(s) code(s) INSEE." },
+        exercice: { type: "string", description: "Année fiscale (ex: '2024'). Sans exercice : affiche l'évolution sur toutes les années disponibles." },
         type: { type: "string", enum: ["particuliers", "entreprises"], description: "Type de fiscalité (défaut: particuliers)" },
       },
-      required: ["commune"],
     },
   },
   {
@@ -113,7 +113,7 @@ async function executeTool(
     case "naviguer_themes":
       return naviguerThemes(args as { theme_id?: string }, env);
     case "consulter_fiscalite_locale":
-      return consulterFiscaliteLocale(args as { commune: string; code_insee?: string; exercice?: string; type?: "particuliers" | "entreprises" });
+      return consulterFiscaliteLocale(args as { commune?: string; code_insee?: string; code_postal?: string; exercice?: string; type?: "particuliers" | "entreprises" });
     case "rechercher_doctrine_fiscale":
       return rechercherDoctrineFiscale(args as { query: string; serie?: string; limit?: number });
     default:
