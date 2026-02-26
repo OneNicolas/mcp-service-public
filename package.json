@@ -1,7 +1,7 @@
 {
   "name": "mcp-service-public",
-  "version": "0.2.0",
-  "description": "MCP Server for French service-public.fr — Fiches pratiques, Annuaire des administrations, Téléservices",
+  "version": "0.3.0",
+  "description": "MCP Server for French service-public.fr — Fiches pratiques, Annuaire, Fiscalité locale, Doctrine fiscale",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

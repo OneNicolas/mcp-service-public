@@ -3,9 +3,11 @@ import { rechercherFiche } from "./tools/rechercher-fiche.js";
 import { lireFiche } from "./tools/lire-fiche.js";
 import { rechercherServiceLocal } from "./tools/rechercher-service-local.js";
 import { naviguerThemes } from "./tools/naviguer-themes.js";
+import { consulterFiscaliteLocale } from "./tools/consulter-fiscalite-locale.js";
+import { rechercherDoctrineFiscale } from "./tools/rechercher-doctrine-fiscale.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 // --- Tool definitions for tools/list ---
 
@@ -63,6 +65,35 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "consulter_fiscalite_locale",
+    description:
+      "Consulte les taux d'imposition locale d'une commune (taxe foncière, taxe d'habitation, TEOM, CFE). Données REI de la DGFiP via data.economie.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'PARIS', 'LYON')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune (ex: '75056', '69123')" },
+        exercice: { type: "string", description: "Année fiscale (ex: '2024'). Par défaut: année la plus récente." },
+        type: { type: "string", enum: ["particuliers", "entreprises"], description: "Type de fiscalité (défaut: particuliers)" },
+      },
+      required: ["commune"],
+    },
+  },
+  {
+    name: "rechercher_doctrine_fiscale",
+    description:
+      "Recherche dans la doctrine fiscale officielle (BOFiP - Bulletin Officiel des Finances Publiques). Couvre IR, TVA, IS, plus-values, etc.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Termes de recherche (ex: 'plus-values immobilières', 'crédit impôt recherche')" },
+        serie: { type: "string", description: "Filtrer par série BOFiP (ex: 'IR', 'TVA', 'IS', 'RFPI', 'BIC')" },
+        limit: { type: "number", description: "Nombre de résultats (1-10, défaut 5)" },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -81,6 +112,10 @@ async function executeTool(
       return rechercherServiceLocal(args as { type_organisme?: string; code_postal?: string; commune?: string; code_insee?: string; limit?: number });
     case "naviguer_themes":
       return naviguerThemes(args as { theme_id?: string }, env);
+    case "consulter_fiscalite_locale":
+      return consulterFiscaliteLocale(args as { commune: string; code_insee?: string; exercice?: string; type?: "particuliers" | "entreprises" });
+    case "rechercher_doctrine_fiscale":
+      return rechercherDoctrineFiscale(args as { query: string; serie?: string; limit?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
