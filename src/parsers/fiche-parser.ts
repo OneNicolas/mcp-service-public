@@ -35,11 +35,11 @@ export function parseFiche(xml: string, filename: string): Fiche | null {
     return {
       id,
       type,
-      titre: extractText(root.dc?.title) || extractText(root.Publication?.["dc:title"]) || id,
-      description: extractText(root.dc?.description) || extractText(root.Publication?.["dc:description"]) || null,
-      sujet: extractText(root.dc?.subject) || extractText(root.Publication?.["dc:subject"]) || null,
+      titre: extractDcField(root, "title") || id,
+      description: extractDcField(root, "description"),
+      sujet: extractDcField(root, "subject"),
       audience: extractAudience(root),
-      url: buildUrl(id, type),
+      url: buildUrl(id),
       theme_id: extractThemeId(root),
       theme_titre: extractThemeTitre(root),
       sous_theme: extractSousTheme(root),
@@ -54,6 +54,16 @@ export function parseFiche(xml: string, filename: string): Fiche | null {
   } catch {
     return null;
   }
+}
+
+/** Extract a Dublin Core field (dc:title, dc:description, dc:subject) */
+function extractDcField(root: Record<string, unknown>, field: string): string | null {
+  // fast-xml-parser keeps the colon: "dc:title", "dc:description", etc.
+  return (
+    extractText(root[`dc:${field}`]) ||
+    extractText(root[field]) ||
+    null
+  );
 }
 
 function findRoot(doc: Record<string, unknown>): Record<string, unknown> | null {
@@ -80,7 +90,7 @@ function detectType(id: string): string {
   return "autre";
 }
 
-function buildUrl(id: string, _type: string): string {
+function buildUrl(id: string): string {
   return `https://www.service-public.fr/particuliers/vosdroits/${id}`;
 }
 
@@ -99,27 +109,26 @@ function extractAudience(root: Record<string, unknown>): string | null {
   return extractText(audience);
 }
 
-function extractThemeId(root: Record<string, unknown>): string | null {
+function extractFilNiveau(root: Record<string, unknown>): Record<string, unknown>[] {
   const fil = root["FilDAriane"] as Record<string, unknown> | undefined;
-  if (!fil) return null;
+  if (!fil) return [];
   const niveau = fil["Niveau"] as Record<string, unknown> | Record<string, unknown>[] | undefined;
-  if (!niveau) return null;
-  const items = Array.isArray(niveau) ? niveau : [niveau];
-  for (const n of items) {
+  if (!niveau) return [];
+  return Array.isArray(niveau) ? niveau : [niveau];
+}
+
+function extractThemeId(root: Record<string, unknown>): string | null {
+  for (const n of extractFilNiveau(root)) {
     if (n["@_type"] === "Thème" || n["@_type"] === "Theme") {
       return extractText(n["@_ID"]) || null;
     }
   }
+  const items = extractFilNiveau(root);
   return items[0] ? extractText(items[0]["@_ID"]) : null;
 }
 
 function extractThemeTitre(root: Record<string, unknown>): string | null {
-  const fil = root["FilDAriane"] as Record<string, unknown> | undefined;
-  if (!fil) return null;
-  const niveau = fil["Niveau"] as Record<string, unknown> | Record<string, unknown>[] | undefined;
-  if (!niveau) return null;
-  const items = Array.isArray(niveau) ? niveau : [niveau];
-  for (const n of items) {
+  for (const n of extractFilNiveau(root)) {
     if (n["@_type"] === "Thème" || n["@_type"] === "Theme") {
       return extractText(n["#text"]) || extractText(n["Titre"]) || null;
     }
@@ -128,12 +137,7 @@ function extractThemeTitre(root: Record<string, unknown>): string | null {
 }
 
 function extractSousTheme(root: Record<string, unknown>): string | null {
-  const fil = root["FilDAriane"] as Record<string, unknown> | undefined;
-  if (!fil) return null;
-  const niveau = fil["Niveau"] as Record<string, unknown> | Record<string, unknown>[] | undefined;
-  if (!niveau) return null;
-  const items = Array.isArray(niveau) ? niveau : [niveau];
-  for (const n of items) {
+  for (const n of extractFilNiveau(root)) {
     if (n["@_type"] === "Sous-thème") {
       return extractText(n["#text"]) || extractText(n["Titre"]) || null;
     }
@@ -142,12 +146,7 @@ function extractSousTheme(root: Record<string, unknown>): string | null {
 }
 
 function extractDossierId(root: Record<string, unknown>): string | null {
-  const fil = root["FilDAriane"] as Record<string, unknown> | undefined;
-  if (!fil) return null;
-  const niveau = fil["Niveau"] as Record<string, unknown> | Record<string, unknown>[] | undefined;
-  if (!niveau) return null;
-  const items = Array.isArray(niveau) ? niveau : [niveau];
-  for (const n of items) {
+  for (const n of extractFilNiveau(root)) {
     if (n["@_type"] === "Dossier") {
       return extractText(n["@_ID"]) || null;
     }
@@ -156,12 +155,7 @@ function extractDossierId(root: Record<string, unknown>): string | null {
 }
 
 function extractDossierTitre(root: Record<string, unknown>): string | null {
-  const fil = root["FilDAriane"] as Record<string, unknown> | undefined;
-  if (!fil) return null;
-  const niveau = fil["Niveau"] as Record<string, unknown> | Record<string, unknown>[] | undefined;
-  if (!niveau) return null;
-  const items = Array.isArray(niveau) ? niveau : [niveau];
-  for (const n of items) {
+  for (const n of extractFilNiveau(root)) {
     if (n["@_type"] === "Dossier") {
       return extractText(n["#text"]) || extractText(n["Titre"]) || null;
     }
