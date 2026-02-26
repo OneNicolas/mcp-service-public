@@ -26,7 +26,6 @@ export async function rechercherServiceLocal(
       whereClauses.push(`pivot LIKE '%${sanitize(type_organisme)}%'`);
     }
     if (code_postal) {
-      // API field is snake_case with space after colon: "code_postal": "75001"
       whereClauses.push(`adresse LIKE '%"code_postal": "${sanitize(code_postal)}"%'`);
     }
     if (commune) {
@@ -38,7 +37,7 @@ export async function rechercherServiceLocal(
 
     const params = new URLSearchParams({
       limit: String(maxLimit),
-      select: "id,nom,pivot,adresse,telephone,adresse_courriel,plage_ouverture,site_internet,geocodage",
+      select: "id,nom,pivot,adresse,telephone,adresse_courriel,plage_ouverture,site_internet",
     });
 
     if (whereClauses.length) {
@@ -52,8 +51,9 @@ export async function rechercherServiceLocal(
     const response = await fetch(url);
 
     if (!response.ok) {
+      const body = await response.text();
       return {
-        content: [{ type: "text", text: `Erreur API Annuaire : ${response.status} ${response.statusText}` }],
+        content: [{ type: "text", text: `Erreur API Annuaire : ${response.status} — ${body.slice(0, 200)}` }],
         isError: true,
       };
     }
@@ -103,7 +103,7 @@ function formatOrganisme(record: AnnuaireRecord): string {
     if (types.length) sections.push(`**Type** : ${types.join(", ")}`);
   }
 
-  // Address
+  // Address (coordinates are embedded in the adresse JSON)
   if (f.adresse) {
     const addrs = safeParseArray(f.adresse);
     for (const addr of addrs) {
@@ -111,6 +111,9 @@ function formatOrganisme(record: AnnuaireRecord): string {
       if (a.type_adresse === "Adresse postale") continue;
       const parts = [a.numero_voie, a.complement1, a.code_postal, a.nom_commune].filter(Boolean);
       if (parts.length) sections.push(`**Adresse** : ${parts.join(" ")}`);
+      if (a.latitude && a.longitude) {
+        sections.push(`**Coordonnées** : ${a.latitude}, ${a.longitude}`);
+      }
     }
   }
 
@@ -153,14 +156,6 @@ function formatOrganisme(record: AnnuaireRecord): string {
     }
   }
 
-  // Geolocation
-  if (f.geocodage) {
-    const geo = typeof f.geocodage === "string" ? JSON.parse(f.geocodage) : f.geocodage;
-    if (geo?.lat && geo?.lon) {
-      sections.push(`**Coordonnées** : ${geo.lat}, ${geo.lon}`);
-    }
-  }
-
   return sections.join("\n");
 }
 
@@ -191,7 +186,6 @@ interface AnnuaireRecord {
   adresse_courriel?: string;
   plage_ouverture?: unknown;
   site_internet?: unknown;
-  geocodage?: unknown;
 }
 
 interface AnnuaireResponse {
