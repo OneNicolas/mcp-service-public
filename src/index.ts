@@ -9,7 +9,7 @@ import { rechercher } from "./tools/rechercher.js";
 import { consulterTransactionsImmobilieres } from "./tools/consulter-transactions-immobilieres.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.6.0";
+const VERSION = "0.6.1";
 
 // --- Tool definitions for tools/list ---
 

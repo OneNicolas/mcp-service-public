@@ -4,7 +4,14 @@ import { resolveCodePostal, resolveNomCommune } from "../utils/geo-api.js";
 const DVF_RESOURCE_ID = "d7933994-2c66-4131-a4da-cf7cd18040a4";
 const TABULAR_API = `https://tabular-api.data.gouv.fr/api/resources/${DVF_RESOURCE_ID}/data/`;
 const MAX_PAGE_SIZE = 200;
-const MAX_PAGES = 5; // 1000 records max
+const MAX_PAGES = 15; // 3000 records max
+
+// Paris, Lyon, Marseille : le code commune INSEE unique est éclaté en arrondissements dans DVF
+const PLM_ARRONDISSEMENTS: Record<string, string[]> = {
+  "75056": Array.from({ length: 20 }, (_, i) => `751${String(i + 1).padStart(2, "0")}`),   // 75101–75120
+  "69123": Array.from({ length: 9 }, (_, i) => `6938${i + 1}`),                             // 69381–69389
+  "13055": Array.from({ length: 16 }, (_, i) => `132${String(i + 1).padStart(2, "0")}`),    // 13201–13216
+};
 
 interface ConsulterTransactionsArgs {
   commune?: string;
@@ -60,6 +67,9 @@ export async function consulterTransactionsImmobilieres(
       };
     }
 
+    // Expansion des arrondissements PLM
+    const expandedCodes = expandPLM(codeInseeList);
+
     // Période : 2 dernières années par défaut ou année spécifique
     const dateMin = annee
       ? `${annee}-01-01`
@@ -69,7 +79,10 @@ export async function consulterTransactionsImmobilieres(
     const allMutations: MutationAgg[] = [];
     const communeLabels: string[] = [];
 
-    for (const code of codeInseeList) {
+    // Pour PLM, afficher le nom de la ville pas chaque arrondissement
+    const plmLabel = getPLMLabel(codeInseeList);
+
+    for (const code of expandedCodes) {
       const { mutations, communeNom } = await fetchDvfForCommune(
         code,
         type_local,
@@ -77,8 +90,12 @@ export async function consulterTransactionsImmobilieres(
         dateMax,
       );
       allMutations.push(...mutations);
-      communeLabels.push(`${communeNom} (${code})`);
+      if (!plmLabel && !communeLabels.includes(`${communeNom} (${code})`)) {
+        communeLabels.push(`${communeNom} (${code})`);
+      }
     }
+
+    if (plmLabel) communeLabels.push(plmLabel);
 
     if (!allMutations.length) {
       const typeNote = type_local ? ` de type "${type_local}"` : "";
@@ -123,6 +140,33 @@ async function resolveInseeList(
   return [];
 }
 
+/** Expanse les codes PLM en codes arrondissements DVF */
+function expandPLM(codes: string[]): string[] {
+  const result: string[] = [];
+  for (const code of codes) {
+    const arrondissements = PLM_ARRONDISSEMENTS[code];
+    if (arrondissements) {
+      result.push(...arrondissements);
+    } else {
+      result.push(code);
+    }
+  }
+  return result;
+}
+
+/** Retourne un label lisible pour PLM, ou null si pas PLM */
+function getPLMLabel(codes: string[]): string | null {
+  const plmNames: Record<string, string> = {
+    "75056": "Paris",
+    "69123": "Lyon",
+    "13055": "Marseille",
+  };
+  for (const code of codes) {
+    if (plmNames[code]) return `${plmNames[code]} (tous arrondissements)`;
+  }
+  return null;
+}
+
 // --- Fetch DVF depuis l'API Tabular ---
 
 async function fetchDvfForCommune(
@@ -135,7 +179,7 @@ async function fetchDvfForCommune(
     page: "1",
     page_size: String(MAX_PAGE_SIZE),
     code_commune__exact: codeInsee,
-    date_mutation__sort: "desc",
+    nature_mutation__exact: "Vente",
   });
   if (typeLocal) params.set("type_local__exact", typeLocal);
   if (dateMin) params.set("date_mutation__greater", dateMin);
@@ -143,22 +187,22 @@ async function fetchDvfForCommune(
 
   // Première page
   const firstPage = await fetchPage(params);
-  const total = firstPage.meta?.total ?? 0;
   let allRecords = firstPage.data ?? [];
   const communeNom = allRecords[0]?.nom_commune ?? codeInsee;
 
   // Pages supplémentaires en parallèle
-  const totalPages = Math.min(Math.ceil(total / MAX_PAGE_SIZE), MAX_PAGES);
-  if (totalPages > 1) {
+  const hasNext = allRecords.length === MAX_PAGE_SIZE;
+  if (hasNext) {
     const pagePromises: Promise<TabularResponse>[] = [];
-    for (let p = 2; p <= totalPages; p++) {
+    for (let p = 2; p <= MAX_PAGES; p++) {
       const nextParams = new URLSearchParams(params);
       nextParams.set("page", String(p));
       pagePromises.push(fetchPage(nextParams));
     }
     const results = await Promise.all(pagePromises);
     for (const r of results) {
-      allRecords = allRecords.concat(r.data ?? []);
+      if (!r.data?.length) break;
+      allRecords = allRecords.concat(r.data);
     }
   }
 
@@ -166,8 +210,8 @@ async function fetchDvfForCommune(
   const seen = new Map<string, MutationAgg>();
   for (const rec of allRecords) {
     const id = rec.id_mutation;
-    if (!id || !rec.valeur_fonciere || !rec.type_local) continue;
-    if (rec.type_local === "Dépendance" && !rec.surface_reelle_bati) continue;
+    if (!id || !rec.valeur_fonciere || rec.valeur_fonciere <= 0) continue;
+    if (!rec.type_local || rec.type_local === "Dépendance") continue;
 
     if (seen.has(id)) {
       const existing = seen.get(id)!;
@@ -187,7 +231,7 @@ async function fetchDvfForCommune(
   return {
     mutations: Array.from(seen.values()),
     communeNom,
-    totalInApi: total,
+    totalInApi: allRecords.length,
   };
 }
 
@@ -236,15 +280,18 @@ function buildReport(
     const items = byType[type] ?? [];
     if (!items.length) continue;
 
-    const withSurface = items.filter((m) => m.surface > 0);
+    // Filtrer les outliers de prix (IQR × 3)
+    const cleanItems = filterOutliers(items);
+    const outlierCount = items.length - cleanItems.length;
 
-    lines.push(`── ${type} (${items.length} transactions) ──`);
+    lines.push(`── ${type} (${cleanItems.length} transactions${outlierCount > 0 ? `, ${outlierCount} exclues` : ""}) ──`);
 
-    const prices = items.map((m) => m.prix).sort((a, b) => a - b);
+    const prices = cleanItems.map((m) => m.prix).sort((a, b) => a - b);
     lines.push(`  Prix de vente :`);
     lines.push(`    Médian : ${formatEuro(median(prices))}`);
     lines.push(`    Fourchette : ${formatEuro(prices[0])} – ${formatEuro(prices[prices.length - 1])}`);
 
+    const withSurface = cleanItems.filter((m) => m.surface > 0);
     if (withSurface.length >= 3) {
       const prixM2 = withSurface.map((m) => m.prix / m.surface).sort((a, b) => a - b);
       const q1 = prixM2[Math.floor(prixM2.length * 0.25)];
@@ -259,7 +306,7 @@ function buildReport(
 
     if (["Appartement", "Maison"].includes(type)) {
       const byPieces = groupBy(
-        items.filter((m) => m.pieces > 0),
+        cleanItems.filter((m) => m.pieces > 0),
         (m) => `${m.pieces} pièce${m.pieces > 1 ? "s" : ""}`,
       );
       const piecesKeys = Object.keys(byPieces).sort();
@@ -284,6 +331,18 @@ function buildReport(
 }
 
 // --- Utilitaires ---
+
+/** Filtre les outliers via IQR × 3 sur les prix */
+function filterOutliers(items: MutationAgg[]): MutationAgg[] {
+  if (items.length < 10) return items;
+  const prices = items.map((m) => m.prix).sort((a, b) => a - b);
+  const q1 = prices[Math.floor(prices.length * 0.25)];
+  const q3 = prices[Math.floor(prices.length * 0.75)];
+  const iqr = q3 - q1;
+  const lower = q1 - 3 * iqr;
+  const upper = q3 + 3 * iqr;
+  return items.filter((m) => m.prix >= lower && m.prix <= upper);
+}
 
 function median(sorted: number[]): number {
   const n = sorted.length;
