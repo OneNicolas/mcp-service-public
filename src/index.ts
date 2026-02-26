@@ -1,68 +1,167 @@
-import { McpAgent } from "agents/mcp";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import type { Env } from "./types.js";
+import type { Env, ToolResult } from "./types.js";
 import { rechercherFiche } from "./tools/rechercher-fiche.js";
 import { lireFiche } from "./tools/lire-fiche.js";
 import { rechercherServiceLocal } from "./tools/rechercher-service-local.js";
 import { naviguerThemes } from "./tools/naviguer-themes.js";
 import { syncDila } from "./sync/dila-sync.js";
 
-export class ServicePublicMcp extends McpAgent<Env> {
-  server = new McpServer({
-    name: "service-public",
-    version: "0.1.0",
-  });
+// --- Tool definitions for tools/list ---
 
-  async init() {
-    this.server.tool(
-      "rechercher_fiche",
+const TOOLS = [
+  {
+    name: "rechercher_fiche",
+    description:
       "Recherche dans les fiches pratiques de service-public.fr (droits, démarches administratives). Utilise la recherche plein texte.",
-      {
-        query: z.string().describe("Termes de recherche (ex: 'passeport', 'allocation logement', 'permis de conduire')"),
-        theme: z.string().optional().describe("Filtrer par thème (ex: 'Papiers', 'Logement', 'Travail')"),
-        audience: z.enum(["Particuliers", "Professionnels", "Associations"]).optional().describe("Public cible"),
-        limit: z.number().min(1).max(20).default(10).optional().describe("Nombre de résultats"),
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Termes de recherche (ex: 'passeport', 'allocation logement')" },
+        theme: { type: "string", description: "Filtrer par thème (ex: 'Papiers', 'Logement')" },
+        audience: { type: "string", enum: ["Particuliers", "Professionnels", "Associations"], description: "Public cible" },
+        limit: { type: "number", description: "Nombre de résultats (1-20, défaut 10)" },
       },
-      async (args) => rechercherFiche(args, this.env),
-    );
-
-    this.server.tool(
-      "lire_fiche",
-      "Lit le contenu complet d'une fiche pratique par son identifiant (ex: F14929 pour le passeport). Inclut le texte, les services en ligne, les références légales et les liens.",
-      {
-        fiche_id: z.string().describe("Identifiant de la fiche (ex: F14929, N360, R42946)"),
+      required: ["query"],
+    },
+  },
+  {
+    name: "lire_fiche",
+    description:
+      "Lit le contenu complet d'une fiche pratique par son identifiant (ex: F14929 pour le passeport).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        fiche_id: { type: "string", description: "Identifiant de la fiche (ex: F14929, N360, R42946)" },
       },
-      async (args) => lireFiche(args, this.env),
-    );
-
-    this.server.tool(
-      "rechercher_service_local",
+      required: ["fiche_id"],
+    },
+  },
+  {
+    name: "rechercher_service_local",
+    description:
       "Recherche un service public local (mairie, préfecture, CAF, CPAM, France Services...) via l'Annuaire de l'administration.",
-      {
-        type_organisme: z.string().optional().describe("Type de service (ex: 'mairie', 'prefecture', 'caf', 'cpam', 'france_services', 'tribunal')"),
-        code_postal: z.string().optional().describe("Code postal (ex: '75001')"),
-        commune: z.string().optional().describe("Nom de la commune"),
-        code_insee: z.string().optional().describe("Code INSEE de la commune"),
-        limit: z.number().min(1).max(20).default(5).optional().describe("Nombre de résultats"),
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        type_organisme: { type: "string", description: "Type de service (ex: 'mairie', 'prefecture', 'caf')" },
+        code_postal: { type: "string", description: "Code postal (ex: '75001')" },
+        commune: { type: "string", description: "Nom de la commune" },
+        code_insee: { type: "string", description: "Code INSEE de la commune" },
+        limit: { type: "number", description: "Nombre de résultats (1-20, défaut 5)" },
       },
-      async (args) => rechercherServiceLocal(args),
-    );
+    },
+  },
+  {
+    name: "naviguer_themes",
+    description:
+      "Parcourt l'arborescence thématique de service-public.fr. Sans paramètre, liste les thèmes principaux.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        theme_id: { type: "string", description: "ID du thème à explorer (ex: N19810, N360)" },
+      },
+    },
+  },
+];
 
-    this.server.tool(
-      "naviguer_themes",
-      "Parcourt l'arborescence thématique de service-public.fr. Sans paramètre, liste les thèmes principaux. Avec un ID, affiche les sous-catégories et fiches associées.",
-      {
-        theme_id: z.string().optional().describe("ID du thème à explorer (ex: N19810, N360)"),
-      },
-      async (args) => naviguerThemes(args, this.env),
-    );
+// --- Tool execution dispatcher ---
+
+async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  env: Env,
+): Promise<ToolResult> {
+  switch (name) {
+    case "rechercher_fiche":
+      return rechercherFiche(args as { query: string; theme?: string; audience?: string; limit?: number }, env);
+    case "lire_fiche":
+      return lireFiche(args as { fiche_id: string }, env);
+    case "rechercher_service_local":
+      return rechercherServiceLocal(args as { type_organisme?: string; code_postal?: string; commune?: string; code_insee?: string; limit?: number });
+    case "naviguer_themes":
+      return naviguerThemes(args as { theme_id?: string }, env);
+    default:
+      return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
 }
+
+// --- Streamable HTTP MCP handler ---
+
+interface JsonRpcRequest {
+  jsonrpc: string;
+  id?: number | string;
+  method: string;
+  params?: Record<string, unknown>;
+}
+
+function jsonRpcResponse(id: number | string | undefined, result: unknown) {
+  return Response.json({ jsonrpc: "2.0", id: id ?? null, result }, {
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function jsonRpcError(id: number | string | undefined, code: number, message: string) {
+  return Response.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, {
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function handleMcpPost(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json()) as JsonRpcRequest;
+
+  switch (body.method) {
+    case "initialize":
+      return jsonRpcResponse(body.id, {
+        protocolVersion: "2025-03-26",
+        capabilities: { tools: {} },
+        serverInfo: { name: "service-public", version: "0.1.0" },
+      });
+
+    case "notifications/initialized":
+      return new Response(null, { status: 204 });
+
+    case "ping":
+      return jsonRpcResponse(body.id, {});
+
+    case "tools/list":
+      return jsonRpcResponse(body.id, { tools: TOOLS });
+
+    case "tools/call": {
+      const params = body.params as { name: string; arguments?: Record<string, unknown> } | undefined;
+      if (!params?.name) {
+        return jsonRpcError(body.id, -32602, "Missing tool name");
+      }
+      try {
+        const result = await executeTool(params.name, params.arguments || {}, env);
+        return jsonRpcResponse(body.id, result);
+      } catch (error) {
+        return jsonRpcResponse(body.id, {
+          content: [{ type: "text", text: `Erreur: ${error instanceof Error ? error.message : "inconnue"}` }],
+          isError: true,
+        });
+      }
+    }
+
+    default:
+      return jsonRpcError(body.id, -32601, `Method not found: ${body.method}`);
+  }
+}
+
+// --- Main fetch handler ---
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    // CORS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
+        },
+      });
+    }
 
     // Health check
     if (url.pathname === "/health") {
@@ -74,42 +173,52 @@ export default {
     }
 
     // Service description
-    if (url.pathname === "/") {
+    if (url.pathname === "/" && request.method === "GET") {
       return Response.json({
         name: "mcp-service-public",
         description: "MCP Server pour les données de service-public.fr",
         mcp_endpoint: "/mcp",
         transport: "streamable-http",
-        tools: [
-          "rechercher_fiche",
-          "lire_fiche",
-          "rechercher_service_local",
-          "naviguer_themes",
-        ],
+        tools: ["rechercher_fiche", "lire_fiche", "rechercher_service_local", "naviguer_themes"],
         source: "https://github.com/OneNicolas/mcp-service-public",
       });
     }
 
-    // Manual sync trigger (protected)
+    // MCP Streamable HTTP endpoint
+    if (url.pathname === "/mcp" && request.method === "POST") {
+      const resp = await handleMcpPost(request, env);
+      resp.headers.set("Access-Control-Allow-Origin", "*");
+      return resp;
+    }
+
+    // MCP GET (SSE for server notifications — not needed, but acknowledge)
+    if (url.pathname === "/mcp" && request.method === "GET") {
+      return new Response("SSE not implemented", { status: 405 });
+    }
+
+    // MCP DELETE (session termination — stateless, just accept)
+    if (url.pathname === "/mcp" && request.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+
+    // Manual sync trigger (protected, chunked)
     if (url.pathname === "/admin/sync" && request.method === "POST") {
       const token = request.headers.get("Authorization")?.replace("Bearer ", "");
       if (!env.ADMIN_SECRET || token !== env.ADMIN_SECRET) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      // Run sync in background, return immediately
-      ctx.waitUntil(
-        syncDila(env).then((result) => {
-          console.log("Admin sync completed:", JSON.stringify(result));
-        }).catch((error) => {
-          console.error("Admin sync failed:", error);
-        }),
-      );
+      const offset = parseInt(url.searchParams.get("offset") || "0", 10);
 
-      return Response.json(
-        { status: "started", message: "Sync démarré en arrière-plan" },
-        { status: 202 },
-      );
+      try {
+        const result = await syncDila(env, offset);
+        return Response.json(result);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "unknown" },
+          { status: 500 },
+        );
+      }
     }
 
     // Sync status
@@ -133,20 +242,21 @@ export default {
       });
     }
 
-    // All other paths → McpAgent Durable Object
-    return (env as Record<string, DurableObjectNamespace>).MCP_OBJECT
-      .get((env as Record<string, DurableObjectNamespace>).MCP_OBJECT.idFromName("default"))
-      .fetch(request);
+    return Response.json({ error: "Not found" }, { status: 404 });
   },
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     console.log("Cron: starting daily DILA sync...");
-    ctx.waitUntil(
-      syncDila(env).then((result) => {
-        console.log("Cron sync completed:", JSON.stringify(result));
-      }).catch((error) => {
-        console.error("Cron sync failed:", error);
-      }),
-    );
+    try {
+      let offset = 0;
+      while (true) {
+        const result = await syncDila(env, offset);
+        if (result.done) break;
+        offset = result.nextOffset!;
+      }
+      console.log("Cron sync completed");
+    } catch (error) {
+      console.error("Cron sync failed:", error);
+    }
   },
 };

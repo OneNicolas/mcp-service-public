@@ -1,6 +1,6 @@
 {
   "name": "mcp-service-public",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP Server for French service-public.fr — Fiches pratiques, Annuaire des administrations, Téléservices",
   "type": "module",
   "scripts": {
@@ -11,11 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "agents": "^0.0.80",
-    "@modelcontextprotocol/sdk": "^1.26.0",
     "fast-xml-parser": "^5.2.0",
-    "fflate": "^0.8.2",
-    "zod": "^3.25.0"
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250214.0",

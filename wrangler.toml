@@ -3,15 +3,14 @@ main = "src/index.ts"
 compatibility_date = "2025-02-20"
 compatibility_flags = ["nodejs_compat"]
 
-# Durable Object for MCP session management
-[durable_objects]
-bindings = [
-  { name = "MCP_OBJECT", class_name = "ServicePublicMcp" }
-]
-
+# Migration to remove the old Durable Object
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ServicePublicMcp"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["ServicePublicMcp"]
 
 # D1 database for fiches index
 [[d1_databases]]
