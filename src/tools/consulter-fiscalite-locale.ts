@@ -5,6 +5,7 @@ const API_BASE = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/dataset
 
 interface ConsulterFiscaliteLocaleArgs {
   commune?: string;
+  communes?: string[];
   code_insee?: string;
   code_postal?: string;
   exercice?: string;
@@ -15,7 +16,12 @@ interface ConsulterFiscaliteLocaleArgs {
 export async function consulterFiscaliteLocale(
   args: ConsulterFiscaliteLocaleArgs,
 ): Promise<ToolResult> {
-  const { commune, code_insee, code_postal, exercice, type = "particuliers" } = args;
+  const { commune, communes, code_insee, code_postal, exercice, type = "particuliers" } = args;
+
+  // Mode comparaison : tableau de communes
+  if (communes?.length) {
+    return comparerCommunes(communes, exercice, type);
+  }
 
   if (!commune && !code_insee && !code_postal) {
     return {
@@ -30,9 +36,9 @@ export async function consulterFiscaliteLocale(
     let cpLabel = "";
 
     if (code_postal) {
-      const communes = await resolveCodePostal(code_postal);
-      inseeToQuery = communes.map((c) => c.code);
-      cpLabel = `Code postal ${code_postal} → ${communes.map((c) => `${c.nom} (${c.code})`).join(", ")}`;
+      const communesGeo = await resolveCodePostal(code_postal);
+      inseeToQuery = communesGeo.map((c) => c.code);
+      cpLabel = `Code postal ${code_postal} → ${communesGeo.map((c) => `${c.nom} (${c.code})`).join(", ")}`;
     }
 
     const dataset =
@@ -121,6 +127,180 @@ export async function consulterFiscaliteLocale(
     };
   }
 }
+
+// --- T2 : Comparaison entre communes ---
+
+/** Compare les taux de fiscalité locale de plusieurs communes côte à côte */
+async function comparerCommunes(
+  communes: string[],
+  exercice: string | undefined,
+  type: "particuliers" | "entreprises",
+): Promise<ToolResult> {
+  if (communes.length < 2) {
+    return {
+      content: [{ type: "text", text: "La comparaison nécessite au moins 2 communes." }],
+      isError: true,
+    };
+  }
+
+  if (communes.length > 5) {
+    return {
+      content: [{ type: "text", text: "Maximum 5 communes pour la comparaison." }],
+      isError: true,
+    };
+  }
+
+  const dataset =
+    type === "entreprises"
+      ? "fiscalite-locale-des-entreprises"
+      : "fiscalite-locale-des-particuliers";
+
+  const selectFields =
+    type === "entreprises"
+      ? "exercice,libcom,insee_com,libdep,q03,mpoid,taux_global_tfb,taux_global_tfnb,taux_plein_teom,taux_global_cfe_hz"
+      : "exercice,libcom,insee_com,libdep,q03,mpoid,taux_global_tfb,taux_global_tfnb,taux_global_th,taux_plein_teom";
+
+  // Année cible : la plus récente disponible ou celle spécifiée
+  const targetYear = exercice || "2024";
+
+  // Requête unique avec filtre OR sur les noms de communes
+  const communeNames = communes.map((c) => sanitize(c.toUpperCase()));
+  const likeFilter = communeNames.map((c) => `libcom like "${c}"`).join(" OR ");
+  const where = `(${likeFilter}) AND exercice="${sanitize(targetYear)}"`;
+
+  const params = new URLSearchParams({
+    limit: String(communes.length * 2),
+    select: selectFields,
+    where,
+    order_by: "libcom ASC",
+  });
+
+  try {
+    const url = `${API_BASE}/${dataset}/records?${params}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const body = await response.text();
+      return {
+        content: [{ type: "text", text: `Erreur API : ${response.status} — ${body.slice(0, 200)}` }],
+        isError: true,
+      };
+    }
+
+    const data = (await response.json()) as ApiResponse;
+
+    if (!data.results?.length) {
+      // Retry avec l'année précédente si 2024 ne donne rien
+      if (targetYear === "2024" && !exercice) {
+        return comparerCommunes(communes, "2023", type);
+      }
+      return {
+        content: [{ type: "text", text: `Aucune donnée trouvée pour les communes demandées (exercice ${targetYear}).` }],
+      };
+    }
+
+    // Dédupliquer : garder un seul résultat par commune
+    const byCommune = new Map<string, Record<string, unknown>>();
+    for (const r of data.results) {
+      const key = String(r.libcom);
+      if (!byCommune.has(key)) byCommune.set(key, r);
+    }
+
+    const results = Array.from(byCommune.values());
+
+    // Vérifier les communes non trouvées
+    const found = new Set(results.map((r) => String(r.libcom)));
+    const notFound = communeNames.filter((c) => !found.has(c));
+
+    const text = type === "entreprises"
+      ? formatComparaisonEntreprises(results, targetYear, notFound)
+      : formatComparaisonParticuliers(results, targetYear, notFound);
+
+    return { content: [{ type: "text", text }] };
+  } catch (error) {
+    return {
+      content: [{ type: "text", text: `Erreur : ${error instanceof Error ? error.message : "inconnue"}` }],
+      isError: true,
+    };
+  }
+}
+
+function formatComparaisonParticuliers(
+  results: Record<string, unknown>[],
+  exercice: string,
+  notFound: string[],
+): string {
+  const lines: string[] = [
+    `**Comparaison fiscalité locale — Particuliers — ${exercice}**\n`,
+  ];
+
+  // En-tête du tableau
+  const headers = ["Commune", "Dép.", "Interco.", "Pop.", "TFB %", "TFNB %", "TH %", "TEOM %"];
+  lines.push(`| ${headers.join(" | ")} |`);
+  lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
+
+  for (const r of results) {
+    const row = [
+      `**${r.libcom}** (${r.insee_com})`,
+      String(r.libdep || ""),
+      truncate(String(r.q03 || "N/A"), 25),
+      fmt(r.mpoid),
+      fmt(r.taux_global_tfb),
+      fmt(r.taux_global_tfnb),
+      fmt(r.taux_global_th),
+      fmt(r.taux_plein_teom),
+    ];
+    lines.push(`| ${row.join(" | ")} |`);
+  }
+
+  if (notFound.length > 0) {
+    lines.push("", `⚠️ Communes non trouvées : ${notFound.join(", ")}`);
+  }
+
+  lines.push("", `_Source : DGFiP — REI ${exercice} via data.economie.gouv.fr_`);
+  return lines.join("\n");
+}
+
+function formatComparaisonEntreprises(
+  results: Record<string, unknown>[],
+  exercice: string,
+  notFound: string[],
+): string {
+  const lines: string[] = [
+    `**Comparaison fiscalité locale — Entreprises — ${exercice}**\n`,
+  ];
+
+  const headers = ["Commune", "Dép.", "Interco.", "Pop.", "TFB %", "TFNB %", "TEOM %", "CFE HZ %"];
+  lines.push(`| ${headers.join(" | ")} |`);
+  lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
+
+  for (const r of results) {
+    const row = [
+      `**${r.libcom}** (${r.insee_com})`,
+      String(r.libdep || ""),
+      truncate(String(r.q03 || "N/A"), 25),
+      fmt(r.mpoid),
+      fmt(r.taux_global_tfb),
+      fmt(r.taux_global_tfnb),
+      fmt(r.taux_plein_teom),
+      fmt(r.taux_global_cfe_hz),
+    ];
+    lines.push(`| ${row.join(" | ")} |`);
+  }
+
+  if (notFound.length > 0) {
+    lines.push("", `⚠️ Communes non trouvées : ${notFound.join(", ")}`);
+  }
+
+  lines.push("", `_Source : DGFiP — REI ${exercice} via data.economie.gouv.fr_`);
+  return lines.join("\n");
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
+
+// --- Existing: Query multiple communes by postal code ---
 
 /** Requête plusieurs communes en parallèle (mode code postal) */
 async function queryMultipleCommunes(
@@ -344,7 +524,7 @@ function fmt(val: unknown): string {
 }
 
 function sanitize(input: string): string {
-  return input.replace(/['"\\\/\n\r]/g, "");
+  return input.replace(/['"\\\n\r]/g, "");
 }
 
 interface ApiResponse {

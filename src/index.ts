@@ -5,13 +5,27 @@ import { rechercherServiceLocal } from "./tools/rechercher-service-local.js";
 import { naviguerThemes } from "./tools/naviguer-themes.js";
 import { consulterFiscaliteLocale } from "./tools/consulter-fiscalite-locale.js";
 import { rechercherDoctrineFiscale } from "./tools/rechercher-doctrine-fiscale.js";
+import { rechercher } from "./tools/rechercher.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 // --- Tool definitions for tools/list ---
 
 const TOOLS = [
+  {
+    name: "rechercher",
+    description:
+      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, ou fiscalité locale (taux par commune). À utiliser en premier si la source appropriée n'est pas évidente.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Question ou termes de recherche en langage naturel (ex: 'taxe foncière à Lyon', 'renouveler passeport', 'crédit impôt recherche')" },
+        limit: { type: "number", description: "Nombre de résultats (1-10, défaut 5)" },
+      },
+      required: ["query"],
+    },
+  },
   {
     name: "rechercher_fiche",
     description:
@@ -73,6 +87,13 @@ const TOOLS = [
       type: "object" as const,
       properties: {
         commune: { type: "string", description: "Nom de la commune (ex: 'PARIS', 'LYON')" },
+        communes: {
+          type: "array",
+          items: { type: "string" },
+          description: "Liste de communes à comparer (2-5 noms en majuscules, ex: ['PARIS', 'LYON', 'MARSEILLE']). Active le mode comparaison côte à côte.",
+          maxItems: 5,
+          minItems: 2,
+        },
         code_insee: { type: "string", description: "Code INSEE de la commune (ex: '75056', '69123')" },
         code_postal: { type: "string", description: "Code postal (ex: '93140', '75001'). Résout automatiquement vers le(s) code(s) INSEE." },
         exercice: { type: "string", description: "Année fiscale (ex: '2024'). Sans exercice : affiche l'évolution sur toutes les années disponibles." },
@@ -104,6 +125,8 @@ async function executeTool(
   env: Env,
 ): Promise<ToolResult> {
   switch (name) {
+    case "rechercher":
+      return rechercher(args as { query: string; limit?: number }, env);
     case "rechercher_fiche":
       return rechercherFiche(args as { query: string; theme?: string; audience?: string; limit?: number }, env);
     case "lire_fiche":
@@ -113,7 +136,7 @@ async function executeTool(
     case "naviguer_themes":
       return naviguerThemes(args as { theme_id?: string }, env);
     case "consulter_fiscalite_locale":
-      return consulterFiscaliteLocale(args as { commune?: string; code_insee?: string; code_postal?: string; exercice?: string; type?: "particuliers" | "entreprises" });
+      return consulterFiscaliteLocale(args as { commune?: string; communes?: string[]; code_insee?: string; code_postal?: string; exercice?: string; type?: "particuliers" | "entreprises" });
     case "rechercher_doctrine_fiscale":
       return rechercherDoctrineFiscale(args as { query: string; serie?: string; limit?: number });
     default:
