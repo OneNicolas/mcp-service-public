@@ -6,9 +6,10 @@ import { naviguerThemes } from "./tools/naviguer-themes.js";
 import { consulterFiscaliteLocale } from "./tools/consulter-fiscalite-locale.js";
 import { rechercherDoctrineFiscale } from "./tools/rechercher-doctrine-fiscale.js";
 import { rechercher } from "./tools/rechercher.js";
+import { consulterTransactionsImmobilieres } from "./tools/consulter-transactions-immobilieres.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 // --- Tool definitions for tools/list ---
 
@@ -16,11 +17,11 @@ const TOOLS = [
   {
     name: "rechercher",
     description:
-      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, ou fiscalité locale (taux par commune). À utiliser en premier si la source appropriée n'est pas évidente.",
+      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), ou transactions immobilières DVF. À utiliser en premier si la source appropriée n'est pas évidente.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Question ou termes de recherche en langage naturel (ex: 'taxe foncière à Lyon', 'renouveler passeport', 'crédit impôt recherche')" },
+        query: { type: "string", description: "Question ou termes de recherche en langage naturel (ex: 'taxe foncière à Lyon', 'renouveler passeport', 'prix immobilier à Bondy')" },
         limit: { type: "number", description: "Nombre de résultats (1-10, défaut 5)" },
       },
       required: ["query"],
@@ -115,6 +116,21 @@ const TOOLS = [
       required: ["query"],
     },
   },
+  {
+    name: "consulter_transactions_immobilieres",
+    description:
+      "Consulte les transactions immobilières (DVF - Demandes de Valeurs Foncières) d'une commune. Fournit prix médians, prix au m², répartition par type de bien et nombre de pièces. Données DGFiP via data.gouv.fr. Hors Alsace, Moselle et Mayotte.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Bondy', 'Lyon')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune (ex: '93010')" },
+        code_postal: { type: "string", description: "Code postal (ex: '93140'). Résout automatiquement vers le(s) code(s) INSEE." },
+        type_local: { type: "string", enum: ["Appartement", "Maison", "Local industriel. commercial ou assimilé"], description: "Filtrer par type de bien" },
+        annee: { type: "number", description: "Filtrer sur une année spécifique (ex: 2024). Par défaut : 2 dernières années." },
+      },
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -139,6 +155,8 @@ async function executeTool(
       return consulterFiscaliteLocale(args as { commune?: string; communes?: string[]; code_insee?: string; code_postal?: string; exercice?: string; type?: "particuliers" | "entreprises" });
     case "rechercher_doctrine_fiscale":
       return rechercherDoctrineFiscale(args as { query: string; serie?: string; limit?: number });
+    case "consulter_transactions_immobilieres":
+      return consulterTransactionsImmobilieres(args as { commune?: string; code_insee?: string; code_postal?: string; type_local?: string; annee?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
