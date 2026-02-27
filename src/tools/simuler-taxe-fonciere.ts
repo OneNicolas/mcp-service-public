@@ -433,6 +433,5 @@ function formatEuro(value: number): string {
 }
 
 function sanitize(input: string): string {
-  return input.replace(/['"\\
-]/g, "");
+  return input.replace(/['"\\]/g, "");
 }
