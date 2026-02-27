@@ -322,7 +322,7 @@ export default {
       let dbError: string | null = null;
       let ficheCount = 0;
       let lastSync: { completed_at: string; fiches_count: number } | null = null;
-      let lastError: { at: string; status: string; message: string | null } | null = null;
+      let lastError: { at: string; status: string } | null = null;
 
       try {
         const syncRow = await env.DB.prepare(
@@ -334,15 +334,15 @@ export default {
         ).first<{ total: number }>();
 
         const errorRow = await env.DB.prepare(
-          `SELECT started_at, status, error_message FROM sync_log WHERE status != 'completed' ORDER BY id DESC LIMIT 1`,
-        ).first<{ started_at: string; status: string; error_message: string | null }>();
+          `SELECT started_at, status FROM sync_log WHERE status != 'completed' AND status != 'running' ORDER BY id DESC LIMIT 1`,
+        ).first<{ started_at: string; status: string }>();
 
         ficheCount = countRow?.total ?? 0;
         lastSync = syncRow
           ? { completed_at: syncRow.completed_at, fiches_count: syncRow.fiches_count }
           : null;
         lastError = errorRow
-          ? { at: errorRow.started_at, status: errorRow.status, message: errorRow.error_message }
+          ? { at: errorRow.started_at, status: errorRow.status }
           : null;
       } catch (e) {
         dbStatus = "error";
