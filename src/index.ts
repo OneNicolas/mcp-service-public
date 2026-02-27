@@ -11,11 +11,12 @@ import { simulerTaxeFonciere } from "./tools/simuler-taxe-fonciere.js";
 import { simulerFraisNotaire } from "./tools/simuler-frais-notaire.js";
 import { consulterZonageImmobilier } from "./tools/consulter-zonage-immobilier.js";
 import { comparerCommunes } from "./tools/comparer-communes.js";
+import { simulerImpotRevenu } from "./tools/simuler-impot-revenu.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 
-const VERSION = "0.9.4";
+const VERSION = "0.9.5";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -204,6 +205,21 @@ const TOOLS = [
       required: ["communes"],
     },
   },
+  {
+    name: "simuler_impot_revenu",
+    description:
+      "Estime l'impot sur le revenu (IR) selon le bareme progressif 2025 (revenus 2024). Calcule le quotient familial, applique le plafonnement, la decote et la contribution exceptionnelle hauts revenus (CEHR). Parametres : revenu net imposable (obligatoire), nombre de parts OU situation familiale + nombre d'enfants.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        revenu_net_imposable: { type: "number", description: "Revenu net imposable en euros (ex: 42000)" },
+        nb_parts: { type: "number", description: "Nombre de parts fiscales (optionnel, defaut 1). Prioritaire sur situation + nb_enfants." },
+        situation: { type: "string", enum: ["celibataire", "marie", "pacse", "divorce", "veuf"], description: "Situation familiale (optionnel, permet le calcul auto des parts)" },
+        nb_enfants: { type: "number", description: "Nombre d'enfants a charge (optionnel, defaut 0)" },
+      },
+      required: ["revenu_net_imposable"],
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -238,6 +254,8 @@ async function executeTool(
       return consulterZonageImmobilier(args as { commune?: string; code_insee?: string; code_postal?: string });
     case "comparer_communes":
       return comparerCommunes(args as { communes: string[] });
+    case "simuler_impot_revenu":
+      return simulerImpotRevenu(args as { revenu_net_imposable: number; nb_parts?: number; situation?: "celibataire" | "marie" | "pacse" | "divorce" | "veuf"; nb_enfants?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }

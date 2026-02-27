@@ -6,6 +6,7 @@ import { consulterTransactionsImmobilieres } from "./consulter-transactions-immo
 import { simulerTaxeFonciere } from "./simuler-taxe-fonciere.js";
 import { simulerFraisNotaire } from "./simuler-frais-notaire.js";
 import { consulterZonageImmobilier } from "./consulter-zonage-immobilier.js";
+import { simulerImpotRevenu } from "./simuler-impot-revenu.js";
 
 interface RechercherArgs {
   query: string;
@@ -19,7 +20,8 @@ export type QueryCategory =
   | "transactions_dvf"
   | "simulation_tf"
   | "simulation_frais_notaire"
-  | "zonage_immobilier";
+  | "zonage_immobilier"
+  | "simulation_ir";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -124,6 +126,12 @@ export async function rechercher(
       return prefixResult(result, "📖 Doctrine fiscale (BOFiP)");
     }
 
+    case "simulation_ir": {
+      // Pas assez d'info dans une query libre pour simuler — on redirige vers la doctrine
+      const result = await rechercherDoctrineFiscale({ query: "impot revenu bareme", limit });
+      return prefixResult(result, "🧮 Simulation IR (utilisez `simuler_impot_revenu` avec revenu_net_imposable pour une estimation)");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -196,6 +204,21 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of dvfPatterns) {
     if (pattern.test(q)) return "transactions_dvf";
+  }
+
+  // T24 -- Patterns simulation IR
+  const simulationIrPatterns = [
+    /\bsimuler?\b.*\b(ir|impot\s+sur\s+le\s+revenu|impot\s+revenu)\b/,
+    /\b(calculer?|estimer?)\b.*\b(ir|impot\s+sur\s+le\s+revenu)\b/,
+    /\bcombien\b.*\b(ir|impot\s+sur\s+le\s+revenu|impot\s+revenu)\b/,
+    /\bbareme\b.*\b(ir|impot|progressif)\b/,
+    /\bquotient\s+familial\b/,
+    /\b(tmi|taux\s+marginal)\b.*\b(imposition|impot)\b/,
+    /\bdecote\b.*\b(ir|impot)\b/,
+  ];
+
+  for (const pattern of simulationIrPatterns) {
+    if (pattern.test(q)) return "simulation_ir";
   }
 
   // Patterns fiscalite locale

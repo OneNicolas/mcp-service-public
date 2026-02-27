@@ -63,6 +63,14 @@ describe("classifyQuery", () => {
     expect(classifyQuery("zone B1 commune")).toBe("zonage_immobilier");
   });
 
+  // T24 -- Simulation IR
+  it("route les requetes simulation IR", () => {
+    expect(classifyQuery("simuler impot sur le revenu")).toBe("simulation_ir");
+    expect(classifyQuery("calculer mon IR")).toBe("simulation_ir");
+    expect(classifyQuery("bareme progressif impot")).toBe("simulation_ir");
+    expect(classifyQuery("quotient familial")).toBe("simulation_ir");
+  });
+
   // Priorite : frais notaire avant DVF
   it("priorise frais notaire sur DVF quand les deux matchent", () => {
     expect(classifyQuery("frais de notaire achat immobilier")).toBe("simulation_frais_notaire");
