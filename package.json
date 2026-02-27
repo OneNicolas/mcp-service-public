@@ -1,7 +1,7 @@
 {
   "name": "mcp-service-public",
-  "version": "0.8.0",
-  "description": "MCP Server for French service-public.fr — Fiches pratiques, Annuaire, Fiscalité locale, Doctrine fiscale, DVF, Simulateurs, Zonage ABC",
+  "version": "1.0.0",
+  "description": "MCP Server for French service-public.fr — 14 outils : fiches pratiques, fiscalite, DVF, simulateurs IR/TF/notaire, conventions collectives, zonage ABC",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

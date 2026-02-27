@@ -2,11 +2,11 @@
 
 ## Contexte
 
-Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant accès aux données publiques françaises via des outils interrogeables par des assistants IA.
+Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant acces aux donnees publiques francaises via des outils interrogeables par des assistants IA.
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v0.8.1
+- **Version actuelle** : v1.0.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -14,9 +14,9 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - TypeScript, Cloudflare Workers (Streamable HTTP MCP)
 - D1 SQLite (FTS5) pour les fiches DILA (~5 500 fiches, sync cron quotidien)
-- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC), geo.api.gouv.fr, annuaire API
+- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), geo.api.gouv.fr, annuaire API
 - Vitest pour les tests unitaires
-- Pas de framework MCP SDK — implémentation JSON-RPC directe
+- Pas de framework MCP SDK — implementation JSON-RPC directe
 
 ## Architecture
 
@@ -25,24 +25,32 @@ src/
 ├── index.ts              # Router MCP + tool definitions + dispatcher (VERSION ici)
 ├── types.ts              # Env, ToolResult, Fiche...
 ├── tools/                # 1 fichier = 1 outil, export async function
-│   ├── rechercher.ts                       # Dispatch unifié intelligent (7 catégories)
-│   ├── rechercher-fiche.ts                 # FTS sur D1
+│   ├── rechercher.ts                       # Dispatch unifie intelligent (8 categories)
+│   ├── rechercher-fiche.ts                 # FTS sur D1 (sanitizer + fallback LIKE + snippets)
 │   ├── lire-fiche.ts                       # Lecture fiche par ID
 │   ├── rechercher-service-local.ts         # Proxy annuaire
-│   ├── naviguer-themes.ts                  # Arborescence thématique
+│   ├── naviguer-themes.ts                  # Arborescence thematique
 │   ├── consulter-fiscalite-locale.ts       # Taux REI (CP, comparaison, tendances)
 │   ├── rechercher-doctrine-fiscale.ts      # BOFiP
 │   ├── consulter-transactions-immobilieres.ts  # DVF + PLM
 │   ├── simuler-taxe-fonciere.ts            # Simulateur TF hybride REI+DVF
-│   ├── simuler-frais-notaire.ts            # Frais de notaire (DMTO par département + émoluments + CSI)
+│   ├── simuler-frais-notaire.ts            # Frais de notaire (DMTO par departement + emoluments + CSI)
 │   ├── consulter-zonage-immobilier.ts      # Zones ABC (Pinel, PTZ, plafonds)
-│   ├── comparer-communes.ts               # Tableau croisé multi-communes (REI + DVF + zonage + services)
+│   ├── comparer-communes.ts               # Tableau croise multi-communes (REI + DVF + zonage + services)
+│   ├── simuler-impot-revenu.ts            # Bareme progressif IR 2025, QF, decote, CEHR
+│   ├── rechercher-convention-collective.ts # Conventions collectives KALI via data.gouv.fr
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
-│       └── simuler-frais-notaire.test.ts
+│       ├── rechercher-fiche.test.ts
+│       ├── simuler-frais-notaire.test.ts
+│       └── simuler-impot-revenu.test.ts
 ├── utils/
-│   └── geo-api.ts        # resolveCodePostal, resolveNomCommune
+│   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
+│   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune
+│   └── stats.ts          # Logging appels outils + dashboard
+├── admin/
+│   └── dashboard.ts      # Dashboard HTML admin
 ├── parsers/
 │   └── fiche-parser.ts   # XML DILA → Fiche
 └── sync/
@@ -51,73 +59,86 @@ src/
 
 ## Pattern pour ajouter un outil
 
-1. Créer `src/tools/mon-outil.ts` avec `export async function monOutil(args, env?): Promise<ToolResult>`
-2. Dans `index.ts` : ajouter import + définition dans `TOOLS[]` + case dans `executeTool()`
+1. Creer `src/tools/mon-outil.ts` avec `export async function monOutil(args, env?): Promise<ToolResult>`
+2. Dans `index.ts` : ajouter import + definition dans `TOOLS[]` + case dans `executeTool()`
 3. Bump `VERSION`
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 12 outils actuels (v0.8.1)
+## Les 14 outils actuels (v1.0.0)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifié (fiches, fiscalité, doctrine, DVF, simulation TF, frais notaire, zonage ABC) |
-| 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1) |
-| 3 | `lire_fiche` | Lecture complète d'une fiche par ID |
+| 1 | `rechercher` | Dispatch unifie (fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR) |
+| 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
+| 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
-| 5 | `naviguer_themes` | Arborescence thématique service-public.fr |
+| 5 | `naviguer_themes` | Arborescence thematique service-public.fr |
 | 6 | `consulter_fiscalite_locale` | Taux d'imposition REI (CP, comparaison, tendances 4 ans) |
 | 7 | `rechercher_doctrine_fiscale` | Doctrine BOFiP (8 983 articles) |
-| 8 | `consulter_transactions_immobilieres` | DVF prix/m², médiane, répartition (PLM inclus) |
-| 9 | `simuler_taxe_fonciere` | Estimation TF = VLC estimée × 50% × taux REI réel |
-| 10 | `simuler_frais_notaire` | DMTO exact par département + émoluments dégressifs + CSI + débours |
+| 8 | `consulter_transactions_immobilieres` | DVF prix/m2, mediane, repartition (PLM inclus) |
+| 9 | `simuler_taxe_fonciere` | Estimation TF = VLC estimee x 50% x taux REI reel |
+| 10 | `simuler_frais_notaire` | DMTO exact par departement + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | Zones ABC : Pinel, PTZ, plafonds loyers/ressources |
-| 12 | `comparer_communes` | Tableau croisé REI + DVF + zonage + services publics (2-5 communes) |
+| 12 | `comparer_communes` | Tableau croise REI + DVF + zonage + services publics (2-5 communes) |
+| 13 | `simuler_impot_revenu` | Bareme progressif IR 2025, quotient familial, decote, CEHR |
+| 14 | `rechercher_convention_collective` | Conventions collectives KALI (IDCC, mot-cle, lien Legifrance) |
 
-## Sprint 5 — Complété ✅
+## Historique des sprints
 
-| Tâche | Description | Statut |
-|-------|-------------|--------|
-| T7 | Intégrer simulateur TF dans `rechercher.ts` (catégorie `simulation_tf`) | ✅ |
-| T8 | Mise à jour README.md (12 outils, exemples, formules) | ✅ |
-| T9 | Nouveau tool `simuler_frais_notaire` | ✅ |
-| T10 | Nouveau tool `consulter_zonage_immobilier` | ✅ |
-| T11 | Nouveau tool `comparer_communes` | ✅ |
-| T12 | Tests unitaires vitest (simuler-taxe-fonciere, rechercher, frais-notaire) | ✅ |
-| T13 | Config build `wrangler.toml` (section `[build]`) | ✅ |
-| T14 | Monitoring `/health` enrichi (version, tools_count, last_error) | ✅ |
+### Sprint 5 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T7 | Integrer simulateur TF dans `rechercher.ts` (categorie `simulation_tf`) |
+| T8 | Mise a jour README.md (12 outils, exemples, formules) |
+| T9 | Nouveau tool `simuler_frais_notaire` |
+| T10 | Nouveau tool `consulter_zonage_immobilier` |
+| T11 | Nouveau tool `comparer_communes` |
+| T12 | Tests unitaires vitest (simuler-taxe-fonciere, rechercher, frais-notaire) |
+| T13 | Config build `wrangler.toml` (section `[build]`) |
+| T14 | Monitoring `/health` enrichi (version, tools_count, last_error) |
 
-## Sprint 6 — Complété ✅
+### Sprint 6 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T15 | Integrer frais notaire et zonage dans le dispatch rechercher.ts |
+| T16 | Taux DMTO par departement (map statique 101 departements, LF 2025) |
+| T17 | Enrichir comparer_communes avec les services publics locaux |
+| T18 | Cache Cloudflare — reporte |
 
-| Tâche | Description | Statut |
-|-------|-------------|--------|
-| T15 | Intégrer `simuler_frais_notaire` et `consulter_zonage_immobilier` dans le dispatch `rechercher.ts` | ✅ |
-| T16 | Taux DMTO par département (map statique 101 départements, source LF 2025 art. 116) | ✅ |
-| T17 | Enrichir `comparer_communes` avec les services publics locaux (API Annuaire) | ✅ |
-| T18 | Cache Cloudflare | ❌ Reporté — évaluer le besoin réel avant |
+### Sprint 7 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T19 | OpenAPI / JSON Schema — reporte |
+| T20 | Dashboard web /admin/dashboard avec statistiques d'usage |
+| T21 | Ameliorer le simulateur TF — reporte |
 
-## Sprint 7 — Roadmap
-
-- **T18** — Évaluer le besoin de cache (mesurer les temps de réponse actuels avant d'implémenter)
-- **T19** — OpenAPI / JSON Schema pour documentation auto des outils
-- **T20** — Dashboard web `/admin/dashboard` avec statistiques d'usage
-- **T21** — Améliorer le simulateur TF (prise en compte abattements, taux intercommunaux détaillés)
+### Sprint 8 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T22 | Robustifier FTS : sanitizer query FTS5, fallback LIKE, snippets |
+| T23 | Ameliorer extraction commune : debut de phrase, codes postaux, noms composes |
+| T24 | Nouveau tool `simuler_impot_revenu` (bareme IR 2025, QF, decote, CEHR) |
+| T25 | Nouveau tool `rechercher_convention_collective` (KALI via data.gouv.fr) |
+| T26 | cachedFetch : timeout 10s, retry 1x sur 5xx/timeout, FetchError |
+| T27 | Mise a jour INSTRUCTIONS.md et README.md pour v1.0 |
 
 ## Contraintes techniques
 
-- Cloudflare Workers : pas de fs, pas de streams Node, CPU time limité (paid plan)
+- Cloudflare Workers : pas de fs, pas de streams Node, CPU time limite (paid plan)
 - D1 batch max 100 statements
 - Push GitHub via API : attention aux regex avec `\\n\\r` dans les strings JSON (utiliser des formes simples)
+- Ne jamais pusher de fichiers avec accents via github:push_files (encode en \uXXXX)
 - Paris/Lyon/Marseille (PLM) : code INSEE unique → expansion en arrondissements pour DVF
-- geo.api.gouv.fr : recherche accent-insensitive nécessite des requêtes séparées par terme
+- geo.api.gouv.fr : recherche accent-insensitive necessite des requetes separees par terme
 
 ## Conventions
 
 - 1 fichier = 1 outil, noms en kebab-case
 - Fonctions courtes, noms explicites, commentaires pour le "pourquoi"
-- DRY : réutiliser `resolveCodePostal`, `resolveNomCommune`, `sanitize`, `formatEuro`
+- DRY : reutiliser `resolveCodePostal`, `resolveNomCommune`, `sanitizeFtsQuery`, `formatEuro`
 - Exporter les fonctions pures pour les tests unitaires
-- Résultats formatés en Markdown avec sources citées
+- Resultats formates en Markdown avec sources citees
 - Disclaimers obligatoires pour les estimations
-- Version bump à chaque nouvel outil
+- Version bump a chaque nouvel outil
 - Tests dans `src/tools/__tests__/` pour les fonctions de calcul

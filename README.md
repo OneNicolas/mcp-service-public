@@ -1,10 +1,10 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-0.8.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Serveur MCP (Model Context Protocol) pour les données publiques françaises. Donne accès aux fiches pratiques service-public.fr, à la fiscalité locale, aux transactions immobilières DVF, à la doctrine fiscale BOFiP, au zonage ABC et aux simulateurs (taxe foncière, frais de notaire).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
 ## URL publique
 
@@ -12,40 +12,55 @@ Serveur MCP (Model Context Protocol) pour les données publiques françaises. Do
 https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 ```
 
-## Les 12 outils MCP (v0.8.1)
+## Les 14 outils MCP (v1.0.0)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
-| 1 | `rechercher` | Dispatch unifié | Route automatiquement vers la bonne source selon la requête |
+| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete |
 | 2 | `rechercher_fiche` | DILA / service-public.fr | Recherche plein texte dans ~5 500 fiches pratiques |
-| 3 | `lire_fiche` | DILA / service-public.fr | Lecture complète d'une fiche par identifiant (F14929, N360…) |
-| 4 | `rechercher_service_local` | API Annuaire | Services publics locaux (mairie, préfecture, CAF…) |
-| 5 | `naviguer_themes` | DILA / service-public.fr | Navigation dans l'arborescence thématique |
-| 6 | `consulter_fiscalite_locale` | DGFiP REI | Taux d'imposition locale par commune (TFB, TEOM, CFE…) |
+| 3 | `lire_fiche` | DILA / service-public.fr | Lecture complete d'une fiche par identifiant (F14929, N360...) |
+| 4 | `rechercher_service_local` | API Annuaire | Services publics locaux (mairie, prefecture, CAF...) |
+| 5 | `naviguer_themes` | DILA / service-public.fr | Navigation dans l'arborescence thematique |
+| 6 | `consulter_fiscalite_locale` | DGFiP REI | Taux d'imposition locale par commune (TFB, TEOM, CFE...) |
 | 7 | `rechercher_doctrine_fiscale` | BOFiP | 8 983 articles de doctrine fiscale en vigueur |
-| 8 | `consulter_transactions_immobilieres` | DVF / data.gouv.fr | Prix médians, prix/m², répartition par type de bien |
-| 9 | `simuler_taxe_fonciere` | REI + DVF | Estimation TF = VLC estimée × 50 % × taux REI réel |
-| 10 | `simuler_frais_notaire` | Barème réglementé | DMTO + émoluments dégressifs + CSI + débours |
+| 8 | `consulter_transactions_immobilieres` | DVF / data.gouv.fr | Prix medians, prix/m2, repartition par type de bien |
+| 9 | `simuler_taxe_fonciere` | REI + DVF | Estimation TF = VLC estimee x 50 % x taux REI reel |
+| 10 | `simuler_frais_notaire` | Bareme reglemente | DMTO + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | data.gouv.fr | Zone ABC (Pinel, PTZ, plafonds loyers/ressources) |
-| 12 | `comparer_communes` | REI + DVF + zonage | Tableau croisé de 2 à 5 communes |
+| 12 | `comparer_communes` | REI + DVF + zonage | Tableau croise de 2 a 5 communes |
+| 13 | `simuler_impot_revenu` | Bareme IR 2025 | IR progressif, quotient familial, decote, CEHR |
+| 14 | `rechercher_convention_collective` | KALI / data.gouv.fr | Conventions collectives par IDCC ou mot-cle |
 
 ## Exemples d'appels
 
-### Recherche unifiée (dispatch automatique)
+### Recherche unifiee (dispatch automatique)
 ```json
-{ "name": "rechercher", "arguments": { "query": "prix immobilier à Lyon" } }
+{ "name": "rechercher", "arguments": { "query": "prix immobilier a Lyon" } }
 { "name": "rechercher", "arguments": { "query": "renouveler passeport" } }
-{ "name": "rechercher", "arguments": { "query": "combien de taxe foncière pour un appartement de 60m² à Bordeaux" } }
+{ "name": "rechercher", "arguments": { "query": "93140 taxe fonciere" } }
+{ "name": "rechercher", "arguments": { "query": "Bondy taxe fonciere" } }
 ```
 
-### Simuler la taxe foncière
+### Simuler la taxe fonciere
 ```json
 { "name": "simuler_taxe_fonciere", "arguments": { "commune": "Lyon", "surface": 75, "type_bien": "Appartement" } }
 ```
 
 ### Simuler les frais de notaire
 ```json
-{ "name": "simuler_frais_notaire", "arguments": { "prix": 250000, "type": "ancien" } }
+{ "name": "simuler_frais_notaire", "arguments": { "prix": 250000, "type": "ancien", "departement": "75" } }
+```
+
+### Simuler l'impot sur le revenu
+```json
+{ "name": "simuler_impot_revenu", "arguments": { "revenu_net_imposable": 42000 } }
+{ "name": "simuler_impot_revenu", "arguments": { "revenu_net_imposable": 80000, "situation": "marie", "nb_enfants": 2 } }
+```
+
+### Conventions collectives
+```json
+{ "name": "rechercher_convention_collective", "arguments": { "query": "boulangerie" } }
+{ "name": "rechercher_convention_collective", "arguments": { "idcc": "3248" } }
 ```
 
 ### Consulter le zonage ABC
@@ -58,50 +73,58 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 { "name": "comparer_communes", "arguments": { "communes": ["Lyon", "Bordeaux", "Nantes"] } }
 ```
 
-### Fiscalité locale
+### Fiscalite locale
 ```json
 { "name": "consulter_fiscalite_locale", "arguments": { "code_postal": "93140" } }
 { "name": "consulter_fiscalite_locale", "arguments": { "communes": ["PARIS", "LYON", "MARSEILLE"] } }
 ```
 
-### Transactions immobilières (DVF)
+### Transactions immobilieres (DVF)
 ```json
 { "name": "consulter_transactions_immobilieres", "arguments": { "commune": "Bondy", "type_local": "Appartement" } }
 ```
 
-## Comment ça marche
+## Comment ca marche
 
-### Simulateur de taxe foncière
-
-La formule d'estimation :
+### Simulateur de taxe fonciere
 
 ```
-VLC estimée = Surface pondérée × Tarif ajusté × Coef. entretien
-Base imposable = VLC × 50 %
-TF estimée = Base imposable × Taux global TFB (REI)
+VLC estimee = Surface ponderee x Tarif ajuste x Coef. entretien
+Base imposable = VLC x 50 %
+TF estimee = Base imposable x Taux global TFB (REI)
 ```
 
-- **Surface pondérée** : surface habitable + équivalences confort (chauffage, sanitaires)
-- **Tarif ajusté** : tarif VLC national × ratio prix local DVF / prix national
-- **Coef. entretien** : selon l'ancienneté du bien (0.90 à 1.15)
-- **Taux TFB** : vrais taux votés par les collectivités (source REI DGFiP)
+- **Surface ponderee** : surface habitable + equivalences confort
+- **Tarif ajuste** : tarif VLC national x ratio prix local DVF / prix national
+- **Coef. entretien** : selon l'anciennete du bien (0.90 a 1.15)
+- **Taux TFB** : vrais taux votes par les collectivites (source REI DGFiP)
 
 ### Simulateur de frais de notaire
 
 ```
-Frais = DMTO + Émoluments TTC + CSI + Débours
+Frais = DMTO + Emoluments TTC + CSI + Debours
 ```
 
-- **DMTO** : 5,81 % (ancien, taux normal) ou 6,32 % (taux majoré 2025) ; 0,71 % (neuf)
-- **Émoluments** : barème dégressif réglementé (3,87 % → 0,799 % selon tranches) + TVA 20 %
-- **CSI** : 0,10 % du prix (minimum 15 €)
-- **Débours** : ~1 200 € (estimation)
+- **DMTO** : 5,81 % (ancien, taux normal) ou 6,32 % (taux majore 2025) ; 0,71 % (neuf)
+- **Emoluments** : bareme degressif reglemente (3,87 % → 0,799 %) + TVA 20 %
+- **CSI** : 0,10 % du prix (minimum 15 EUR)
+- **Debours** : ~1 200 EUR (estimation)
+
+### Simulateur d'impot sur le revenu
+
+```
+Quotient familial = Revenu net imposable / Nombre de parts
+IR brut = Bareme progressif applique au QF x Nombre de parts
+IR net = IR brut - Decote (si applicable) + CEHR (si > 250k/500k)
+```
+
+Bareme 2025 (revenus 2024) : 0 % / 11 % / 30 % / 41 % / 45 %
 
 ## Utilisation
 
 ### Claude.ai (projet ou conversation)
 
-Ajouter le serveur MCP dans les paramètres :
+Ajouter le serveur MCP dans les parametres :
 - URL : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
 - Transport : Streamable HTTP
 
@@ -120,7 +143,7 @@ Dans `claude_desktop_config.json` :
 }
 ```
 
-> Nécessite [mcp-remote](https://www.npmjs.com/package/mcp-remote) installé globalement.
+> Necessite [mcp-remote](https://www.npmjs.com/package/mcp-remote) installe globalement.
 
 ## Architecture
 
@@ -130,44 +153,47 @@ Cloudflare Workers (plan payant)
 ├── D1 SQLite (fiches DILA)
 │   ├── fiches (~5 500 fiches pratiques)
 │   ├── fiches_fts (index FTS5, tokenize unicode61)
-│   ├── themes (304 thèmes hiérarchiques)
-│   └── sync_log (historique des synchronisations)
-├── Proxy API (temps réel)
-│   ├── data.economie.gouv.fr → REI fiscalité locale + BOFiP
-│   ├── data.gouv.fr → DVF transactions + Zonage ABC
-│   ├── geo.api.gouv.fr → Résolution communes
+│   ├── themes (304 themes hierarchiques)
+│   ├── sync_log (historique des synchronisations)
+│   └── tool_stats (statistiques d'usage)
+├── Proxy API (temps reel, cache + retry)
+│   ├── data.economie.gouv.fr → REI fiscalite locale + BOFiP
+│   ├── data.gouv.fr → DVF transactions + Zonage ABC + KALI conventions
+│   ├── geo.api.gouv.fr → Resolution communes
 │   └── API Annuaire → services publics locaux
 └── Cron (0 6 * * *) → sync quotidienne DILA
 ```
 
-### Sources de données
+### Sources de donnees
 
-| Source | Type | Données |
+| Source | Type | Donnees |
 |--------|------|---------|
-| DILA (lecomarquage) | ZIP quotidien → D1 | Fiches pratiques, thèmes |
-| API Annuaire | Proxy temps réel | Services publics locaux |
-| data.economie.gouv.fr | Proxy temps réel | Fiscalité locale (REI), BOFiP doctrine |
-| data.gouv.fr | Proxy temps réel | DVF transactions, Zonage ABC |
-| geo.api.gouv.fr | Proxy temps réel | Résolution communes (CP/INSEE/nom) |
+| DILA (lecomarquage) | ZIP quotidien → D1 | Fiches pratiques, themes |
+| API Annuaire | Proxy temps reel | Services publics locaux |
+| data.economie.gouv.fr | Proxy temps reel | Fiscalite locale (REI), BOFiP doctrine |
+| data.gouv.fr | Proxy temps reel | DVF transactions, Zonage ABC, KALI conventions collectives |
+| geo.api.gouv.fr | Proxy temps reel | Resolution communes (CP/INSEE/nom) |
 
 ### Endpoints
 
-| Méthode | Path | Description |
+| Methode | Path | Description |
 |---------|------|-------------|
 | POST | `/mcp` | Endpoint MCP (JSON-RPC) |
-| GET | `/health` | Santé du service, version, outils, dernière erreur |
+| GET | `/health` | Sante du service, version, outils, derniere erreur |
 | GET | `/` | Description du service |
-| POST | `/admin/sync/full` | Sync complète DILA (auth requise) |
-| GET | `/admin/sync` | Statut des dernières syncs (auth requise) |
+| GET | `/admin/dashboard` | Dashboard HTML avec statistiques (auth requise) |
+| GET | `/admin/dashboard/api` | API JSON du dashboard (auth requise) |
+| POST | `/admin/sync/full` | Sync complete DILA (auth requise) |
+| GET | `/admin/sync` | Statut des dernieres syncs (auth requise) |
 
-## Développement
+## Developpement
 
 ```powershell
 npm install
 npm run dev          # Serveur local
-npm run test         # Tests unitaires (vitest)
-npm run typecheck    # Vérification TypeScript
-npm run deploy       # Déploiement Cloudflare
+npx vitest run       # Tests unitaires
+npm run typecheck    # Verification TypeScript
+npm run deploy       # Deploiement Cloudflare
 ```
 
 ## Stack technique
@@ -175,15 +201,15 @@ npm run deploy       # Déploiement Cloudflare
 - TypeScript / Cloudflare Workers
 - D1 SQLite + FTS5
 - Vitest (tests unitaires)
-- fflate (décompression ZIP)
+- fflate (decompression ZIP)
 - fast-xml-parser (parsing XML DILA)
 - APIs : Annuaire, data.economie.gouv.fr, data.gouv.fr, geo.api.gouv.fr
 
 ## Contribution
 
 1. Fork le repo
-2. Créer une branche (`git checkout -b feature/mon-outil`)
+2. Creer une branche (`git checkout -b feature/mon-outil`)
 3. Suivre le pattern : 1 fichier = 1 outil dans `src/tools/`
-4. Ajouter l'import + définition + case dans `src/index.ts`
-5. Écrire les tests dans `src/tools/__tests__/`
+4. Ajouter l'import + definition + case dans `src/index.ts`
+5. Ecrire les tests dans `src/tools/__tests__/`
 6. Push sur `main` → auto-deploy

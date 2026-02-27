@@ -17,7 +17,7 @@ import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 
-const VERSION = "0.9.7";
+const VERSION = "1.0.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
