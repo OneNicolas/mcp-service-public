@@ -1,6 +1,6 @@
 import type { ToolResult } from "../types.js";
 
-// --- Bar\u00e8me \u00e9moluments notaire (arr\u00eat\u00e9 28/02/2020, stable depuis 01/03/2020) ---
+// --- Bareme emoluments notaire (arrete 28/02/2020, stable depuis 01/03/2020) ---
 
 const TRANCHES_EMOLUMENTS = [
   { plafond: 6_500, taux: 0.03870 },
@@ -17,6 +17,85 @@ const DEBOURS_FORFAIT = 1_200;
 const DMTO_ANCIEN_NORMAL = 0.0581;
 const DMTO_ANCIEN_MAJORE = 0.0632;
 const DMTO_NEUF = 0.0071;
+
+// T16 -- Departements ayant conserve le taux normal (4,50 % departemental = 5,81 % total)
+// Tous les autres (83 departements) sont au taux majore (5,00 % = 6,32 %) depuis avril 2025
+// Source : LF 2025 art. 116 (art. 1594 D CGI), deliberations departementales
+// Mise a jour : fevrier 2026
+const DEPARTEMENTS_TAUX_NORMAL = new Set([
+  "01",  // Ain
+  "2A",  // Corse-du-Sud
+  "2B",  // Haute-Corse
+  "22",  // Cotes-d'Armor
+  "29",  // Finistere
+  "35",  // Ille-et-Vilaine
+  "38",  // Isere
+  "42",  // Loire
+  "44",  // Loire-Atlantique
+  "50",  // Manche
+  "51",  // Marne
+  "56",  // Morbihan
+  "63",  // Puy-de-Dome
+  "69",  // Rhone / Metropole de Lyon
+  "75",  // Paris
+  "972", // Martinique
+  "973", // Guyane
+  "976", // Mayotte
+]);
+
+/** T16 -- Determine le taux DMTO applicable selon le departement */
+export function getTauxDMTO(departement: string | undefined, type: "ancien" | "neuf"): {
+  taux: number;
+  isMajore: boolean;
+  isExact: boolean;
+} {
+  if (type === "neuf") {
+    return { taux: DMTO_NEUF, isMajore: false, isExact: true };
+  }
+
+  if (!departement) {
+    return { taux: DMTO_ANCIEN_NORMAL, isMajore: false, isExact: false };
+  }
+
+  const dep = normalizeDepartement(departement);
+  if (!dep) {
+    return { taux: DMTO_ANCIEN_NORMAL, isMajore: false, isExact: false };
+  }
+
+  const isNormal = DEPARTEMENTS_TAUX_NORMAL.has(dep);
+  return {
+    taux: isNormal ? DMTO_ANCIEN_NORMAL : DMTO_ANCIEN_MAJORE,
+    isMajore: !isNormal,
+    isExact: true,
+  };
+}
+
+/** Normalise un code departement (accepte "69", "2A", "971", "Rhone", etc.) */
+export function normalizeDepartement(input: string): string | null {
+  const trimmed = input.trim().toUpperCase();
+
+  // Code postal 5 chiffres -> extraire departement
+  if (/^\d{5}$/.test(trimmed)) {
+    const prefix2 = trimmed.slice(0, 2);
+    if (prefix2 === "97" || prefix2 === "98") return trimmed.slice(0, 3);
+    if (prefix2 === "20") {
+      const cp = parseInt(trimmed, 10);
+      return cp < 20200 ? "2A" : "2B";
+    }
+    return prefix2;
+  }
+
+  // Code departement direct
+  if (/^\d{1,3}$/.test(trimmed)) {
+    const num = parseInt(trimmed, 10);
+    if (num >= 1 && num <= 95) return String(num).padStart(2, "0");
+    if (num >= 971 && num <= 976) return String(num);
+    return null;
+  }
+  if (/^2[AB]$/i.test(trimmed)) return trimmed;
+
+  return null;
+}
 
 // --- Exports pour les tests ---
 
@@ -38,7 +117,7 @@ export function calculerEmoluments(prix: number): {
     totalHT += montant;
     detail.push({
       tranche: plafond === Infinity
-        ? `Au-del\u00e0 de ${formatEuro(seuil)}`
+        ? `Au-dela de ${formatEuro(seuil)}`
         : `${formatEuro(seuil)} \u2192 ${formatEuro(plafond)}`,
       montant,
     });
@@ -50,15 +129,13 @@ export function calculerEmoluments(prix: number): {
   return { emolumentsHT: totalHT, emolumentsTTC: totalHT * (1 + TVA_TAUX), detail };
 }
 
-export function calculerDMTO(prix: number, type: "ancien" | "neuf", tauxMajore: boolean): number {
-  if (type === "neuf") return prix * DMTO_NEUF;
-  return prix * (tauxMajore ? DMTO_ANCIEN_MAJORE : DMTO_ANCIEN_NORMAL);
+export function calculerDMTO(prix: number, taux: number): number {
+  return prix * taux;
 }
 
 export function calculerFraisNotaire(args: {
   prix: number;
-  type: "ancien" | "neuf";
-  tauxMajore?: boolean;
+  tauxDMTO: number;
 }): {
   dmto: number;
   emolumentsHT: number;
@@ -68,8 +145,8 @@ export function calculerFraisNotaire(args: {
   total: number;
   pourcentagePrix: number;
 } {
-  const { prix, type, tauxMajore = false } = args;
-  const dmto = calculerDMTO(prix, type, tauxMajore);
+  const { prix, tauxDMTO } = args;
+  const dmto = calculerDMTO(prix, tauxDMTO);
   const { emolumentsHT, emolumentsTTC } = calculerEmoluments(prix);
   const csi = Math.max(CSI_MINIMUM, prix * CSI_TAUX);
   const total = dmto + emolumentsTTC + csi + DEBOURS_FORFAIT;
@@ -100,30 +177,58 @@ export async function simulerFraisNotaire(args: SimulerFraisNotaireArgs): Promis
 
   if (!prix || prix <= 0) {
     return {
-      content: [{ type: "text", text: "Le prix d'achat doit \u00eatre sup\u00e9rieur \u00e0 0 \u20ac." }],
+      content: [{ type: "text", text: "Le prix d'achat doit etre superieur a 0 \u20ac." }],
       isError: true,
     };
   }
 
   if (!type || (type !== "ancien" && type !== "neuf")) {
     return {
-      content: [{ type: "text", text: "Le type de bien doit \u00eatre \"ancien\" ou \"neuf\"." }],
+      content: [{ type: "text", text: "Le type de bien doit etre \"ancien\" ou \"neuf\"." }],
       isError: true,
     };
   }
 
-  const isAncien = type === "ancien";
-  const resultNormal = calculerFraisNotaire({ prix, type, tauxMajore: false });
-  const resultMajore = isAncien ? calculerFraisNotaire({ prix, type, tauxMajore: true }) : null;
+  const dmtoInfo = getTauxDMTO(departement, type);
   const { emolumentsHT, emolumentsTTC, detail } = calculerEmoluments(prix);
   const csi = Math.max(CSI_MINIMUM, prix * CSI_TAUX);
 
-  const report = buildReport({
-    prix, type, departement,
-    emolumentsHT, emolumentsTTC, emolumentsDetail: detail,
-    csi, debours: DEBOURS_FORFAIT,
-    resultNormal, resultMajore,
-  });
+  let report: string;
+
+  if (type === "neuf") {
+    const result = calculerFraisNotaire({ prix, tauxDMTO: DMTO_NEUF });
+    report = buildReport({
+      prix, type, departement,
+      emolumentsHT, emolumentsTTC, emolumentsDetail: detail,
+      csi, debours: DEBOURS_FORFAIT,
+      dmtoInfo,
+      resultPrincipal: result,
+      resultAlternatif: null,
+    });
+  } else if (dmtoInfo.isExact) {
+    // T16 -- Departement connu : afficher uniquement le taux reel
+    const result = calculerFraisNotaire({ prix, tauxDMTO: dmtoInfo.taux });
+    report = buildReport({
+      prix, type, departement,
+      emolumentsHT, emolumentsTTC, emolumentsDetail: detail,
+      csi, debours: DEBOURS_FORFAIT,
+      dmtoInfo,
+      resultPrincipal: result,
+      resultAlternatif: null,
+    });
+  } else {
+    // Pas de departement : afficher les deux hypotheses
+    const resultNormal = calculerFraisNotaire({ prix, tauxDMTO: DMTO_ANCIEN_NORMAL });
+    const resultMajore = calculerFraisNotaire({ prix, tauxDMTO: DMTO_ANCIEN_MAJORE });
+    report = buildReport({
+      prix, type, departement,
+      emolumentsHT, emolumentsTTC, emolumentsDetail: detail,
+      csi, debours: DEBOURS_FORFAIT,
+      dmtoInfo,
+      resultPrincipal: resultNormal,
+      resultAlternatif: resultMajore,
+    });
+  }
 
   return { content: [{ type: "text", text: report }] };
 }
@@ -139,8 +244,9 @@ interface ReportData {
   emolumentsDetail: { tranche: string; montant: number }[];
   csi: number;
   debours: number;
-  resultNormal: ReturnType<typeof calculerFraisNotaire>;
-  resultMajore: ReturnType<typeof calculerFraisNotaire> | null;
+  dmtoInfo: ReturnType<typeof getTauxDMTO>;
+  resultPrincipal: ReturnType<typeof calculerFraisNotaire>;
+  resultAlternatif: ReturnType<typeof calculerFraisNotaire> | null;
 }
 
 function buildReport(d: ReportData): string {
@@ -149,22 +255,30 @@ function buildReport(d: ReportData): string {
   lines.push(`\ud83c\udfe0 **Simulation frais de notaire \u2014 Bien ${d.type}**`);
   lines.push("");
   lines.push(`**Prix d'achat : ${formatEuro(d.prix)}**`);
-  if (d.departement) lines.push(`  D\u00e9partement : ${d.departement}`);
+  if (d.departement) lines.push(`  Departement : ${d.departement}`);
   lines.push("");
 
   lines.push("**1. Droits de mutation (DMTO) :**");
   if (d.type === "neuf") {
-    lines.push(`  Taxe publicit\u00e9 fonci\u00e8re (neuf) : ${(DMTO_NEUF * 100).toFixed(2)} % = **${formatEuro(d.resultNormal.dmto)}**`);
-  } else {
-    lines.push(`  Taux normal (${(DMTO_ANCIEN_NORMAL * 100).toFixed(2)} %) : ${formatEuro(d.resultNormal.dmto)}`);
-    if (d.resultMajore) {
-      lines.push(`  Taux major\u00e9 (${(DMTO_ANCIEN_MAJORE * 100).toFixed(2)} %, 83 d\u00e9partements depuis avril 2025) : ${formatEuro(d.resultMajore.dmto)}`);
+    lines.push(`  Taxe publicite fonciere (neuf) : ${(DMTO_NEUF * 100).toFixed(2)} % = **${formatEuro(d.resultPrincipal.dmto)}**`);
+  } else if (d.dmtoInfo.isExact) {
+    const label = d.dmtoInfo.isMajore ? "majore" : "normal";
+    lines.push(`  Taux ${label} (${(d.dmtoInfo.taux * 100).toFixed(2)} %) : **${formatEuro(d.resultPrincipal.dmto)}**`);
+    if (d.dmtoInfo.isMajore) {
+      lines.push(`  _Taux majore applicable dans ce departement (LF 2025, temporaire 2025-2027)._`);
+      lines.push(`  _Les primo-accedants sont exemptes du taux majore._`);
     }
-    lines.push(`  _Note : les primo-acc\u00e9dants sont exempt\u00e9s du taux major\u00e9._`);
+  } else {
+    lines.push(`  Taux normal (${(DMTO_ANCIEN_NORMAL * 100).toFixed(2)} %) : ${formatEuro(d.resultPrincipal.dmto)}`);
+    if (d.resultAlternatif) {
+      lines.push(`  Taux majore (${(DMTO_ANCIEN_MAJORE * 100).toFixed(2)} %, 83 departements depuis avril 2025) : ${formatEuro(d.resultAlternatif.dmto)}`);
+    }
+    lines.push(`  _Precisez le departement pour obtenir le taux exact._`);
+    lines.push(`  _Les primo-accedants sont exemptes du taux majore._`);
   }
   lines.push("");
 
-  lines.push("**2. \u00c9moluments du notaire (bar\u00e8me d\u00e9gressif r\u00e9glement\u00e9) :**");
+  lines.push("**2. Emoluments du notaire (bareme degressif reglemente) :**");
   for (const t of d.emolumentsDetail) {
     lines.push(`  ${t.tranche} : ${formatEuro(t.montant)}`);
   }
@@ -174,25 +288,30 @@ function buildReport(d: ReportData): string {
   lines.push("");
 
   lines.push("**3. Autres frais :**");
-  lines.push(`  Contribution de s\u00e9curit\u00e9 immobili\u00e8re (0,10 %) : ${formatEuro(d.csi)}`);
-  lines.push(`  D\u00e9bours et frais divers (estimation) : ${formatEuro(d.debours)}`);
+  lines.push(`  Contribution de securite immobiliere (0,10 %) : ${formatEuro(d.csi)}`);
+  lines.push(`  Debours et frais divers (estimation) : ${formatEuro(d.debours)}`);
   lines.push("");
 
   lines.push("---");
   lines.push("");
-  lines.push(`**\u27a1\ufe0f Estimation frais de notaire (taux normal) : ${formatEuro(d.resultNormal.total)} (${d.resultNormal.pourcentagePrix.toFixed(1)} % du prix)**`);
-  if (d.resultMajore) {
-    lines.push(`**\u27a1\ufe0f Estimation frais de notaire (taux major\u00e9) : ${formatEuro(d.resultMajore.total)} (${d.resultMajore.pourcentagePrix.toFixed(1)} % du prix)**`);
+
+  if (d.dmtoInfo.isExact || d.type === "neuf") {
+    lines.push(`**\u27a1\ufe0f Estimation frais de notaire : ${formatEuro(d.resultPrincipal.total)} (${d.resultPrincipal.pourcentagePrix.toFixed(1)} % du prix)**`);
+  } else {
+    lines.push(`**\u27a1\ufe0f Estimation frais de notaire (taux normal) : ${formatEuro(d.resultPrincipal.total)} (${d.resultPrincipal.pourcentagePrix.toFixed(1)} % du prix)**`);
+    if (d.resultAlternatif) {
+      lines.push(`**\u27a1\ufe0f Estimation frais de notaire (taux majore) : ${formatEuro(d.resultAlternatif.total)} (${d.resultAlternatif.pourcentagePrix.toFixed(1)} % du prix)**`);
+    }
   }
   lines.push("");
 
   lines.push("\u26a0\ufe0f **Estimation indicative uniquement.**");
-  lines.push("  Les frais r\u00e9els d\u00e9pendent du d\u00e9partement, de la situation de l'acqu\u00e9reur");
-  lines.push("  (primo-acc\u00e9dant ou non) et des frais sp\u00e9cifiques au dossier.");
-  lines.push("  Le notaire peut accorder une remise de 20 % sur ses \u00e9moluments");
-  lines.push("  pour les biens > 100 000 \u20ac. Demandez un devis \u00e0 votre notaire.");
+  lines.push("  Les frais reels dependent du departement, de la situation de l'acquereur");
+  lines.push("  (primo-accedant ou non) et des frais specifiques au dossier.");
+  lines.push("  Le notaire peut accorder une remise de 20 % sur ses emoluments");
+  lines.push("  pour les biens > 100 000 \u20ac. Demandez un devis a votre notaire.");
   lines.push("");
-  lines.push("_Sources : bar\u00e8me art. A444-91 Code de commerce (arr\u00eat\u00e9 28/02/2020), taux DMTO art. 1594 D CGI_");
+  lines.push("_Sources : bareme art. A444-91 Code de commerce (arrete 28/02/2020), taux DMTO art. 1594 D CGI, LF 2025 art. 116_");
 
   return lines.join("\n");
 }
