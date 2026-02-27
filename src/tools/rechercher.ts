@@ -4,15 +4,24 @@ import { rechercherDoctrineFiscale } from "./rechercher-doctrine-fiscale.js";
 import { consulterFiscaliteLocale } from "./consulter-fiscalite-locale.js";
 import { consulterTransactionsImmobilieres } from "./consulter-transactions-immobilieres.js";
 import { simulerTaxeFonciere } from "./simuler-taxe-fonciere.js";
+import { simulerFraisNotaire } from "./simuler-frais-notaire.js";
+import { consulterZonageImmobilier } from "./consulter-zonage-immobilier.js";
 
 interface RechercherArgs {
   query: string;
   limit?: number;
 }
 
-export type QueryCategory = "fiscalite_locale" | "doctrine_bofip" | "fiches_dila" | "transactions_dvf" | "simulation_tf";
+export type QueryCategory =
+  | "fiscalite_locale"
+  | "doctrine_bofip"
+  | "fiches_dila"
+  | "transactions_dvf"
+  | "simulation_tf"
+  | "simulation_frais_notaire"
+  | "zonage_immobilier";
 
-/** Recherche unifiée : dispatche automatiquement vers la bonne source */
+/** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
   args: RechercherArgs,
   env: Env,
@@ -30,25 +39,46 @@ export async function rechercher(
 
   switch (category) {
     case "simulation_tf": {
-      // Tenter d'extraire les paramètres pour le simulateur
       const communeName = extractCommuneName(query);
       const surface = extractSurface(query);
       const typeBien = extractTypeBien(query);
 
       if (communeName && surface && typeBien) {
         const result = await simulerTaxeFonciere({ commune: communeName, surface, type_bien: typeBien });
-        return prefixResult(result, "\ud83e\uddee Simulation taxe foncière");
+        return prefixResult(result, "\ud83e\uddee Simulation taxe fonciere");
       }
 
-      // Paramètres insuffisants -> fallback vers fiscalité locale si commune détectée
       if (communeName) {
         const result = await consulterFiscaliteLocale({ commune: communeName });
-        return prefixResult(result, "\ud83d\udccd Fiscalité locale (paramètres insuffisants pour simulation, utiliser `simuler_taxe_fonciere` avec surface et type de bien)");
+        return prefixResult(result, "\ud83d\udccd Fiscalite locale (parametres insuffisants pour simulation, utiliser `simuler_taxe_fonciere` avec surface et type de bien)");
       }
 
-      // Pas de commune -> fiches DILA
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "\ud83d\udccb Fiches pratiques (service-public.fr)");
+    }
+
+    case "simulation_frais_notaire": {
+      const prix = extractPrix(query);
+      const typeAchat = extractTypeAchat(query);
+
+      if (prix) {
+        const result = await simulerFraisNotaire({ prix, type: typeAchat ?? "ancien" });
+        const suffix = typeAchat ? "" : " (ancien par defaut)";
+        return prefixResult(result, `\ud83c\udfe0 Simulation frais de notaire${suffix}`);
+      }
+
+      const result = await rechercherFiche({ query, limit }, env);
+      return prefixResult(result, "\ud83d\udccb Fiches pratiques (precisez un montant pour simuler les frais de notaire via `simuler_frais_notaire`)");
+    }
+
+    case "zonage_immobilier": {
+      const communeName = extractCommuneName(query);
+      if (communeName) {
+        const result = await consulterZonageImmobilier({ commune: communeName });
+        return prefixResult(result, "\ud83d\udccd Zonage immobilier");
+      }
+      const result = await rechercherFiche({ query, limit }, env);
+      return prefixResult(result, "\ud83d\udccb Fiches pratiques (precisez une commune pour le zonage via `consulter_zonage_immobilier`)");
     }
 
     case "transactions_dvf": {
@@ -56,7 +86,7 @@ export async function rechercher(
       const typeLocal = extractTypeLocal(query);
       if (communeName) {
         const result = await consulterTransactionsImmobilieres({ commune: communeName, type_local: typeLocal ?? undefined });
-        return prefixResult(result, "\ud83c\udfe0 Transactions immobilières (DVF)");
+        return prefixResult(result, "\ud83c\udfe0 Transactions immobilieres (DVF)");
       }
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "\ud83d\udccb Fiches pratiques (service-public.fr)");
@@ -66,7 +96,7 @@ export async function rechercher(
       const communeName = extractCommuneName(query);
       if (communeName) {
         const result = await consulterFiscaliteLocale({ commune: communeName });
-        return prefixResult(result, "\ud83d\udccd Fiscalité locale");
+        return prefixResult(result, "\ud83d\udccd Fiscalite locale");
       }
       const result = await rechercherDoctrineFiscale({ query, limit });
       return prefixResult(result, "\ud83d\udcd6 Doctrine fiscale (BOFiP)");
@@ -84,11 +114,11 @@ export async function rechercher(
   }
 }
 
-/** Classifie la requête pour router vers la bonne source */
+/** Classifie la requete pour router vers la bonne source */
 export function classifyQuery(query: string): QueryCategory {
   const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  // T7 — Patterns simulation TF (vérifiés AVANT fiscalité locale)
+  // Patterns simulation TF (avant fiscalite locale)
   const simulationTfPatterns = [
     /\bcombien\b.*\btaxe\s+foncier/,
     /\bestimer?\b.*\btaxe\s+foncier/,
@@ -101,6 +131,38 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of simulationTfPatterns) {
     if (pattern.test(q)) return "simulation_tf";
+  }
+
+  // T15 -- Patterns frais de notaire (avant DVF)
+  const fraisNotairePatterns = [
+    /\bfrais\s+(de\s+)?notaire\b/,
+    /\bfrais\s+d.?acquisition\b/,
+    /\bdroits?\s+(de\s+)?mutation\b/,
+    /\bsimuler?\b.*\bnotaire\b/,
+    /\bcombien\b.*\bnotaire\b/,
+    /\b(cout|montant)\b.*\bnotaire\b/,
+    /\bemoluments?\b.*\bnotaire\b/,
+    /\bdmto\b/,
+  ];
+
+  for (const pattern of fraisNotairePatterns) {
+    if (pattern.test(q)) return "simulation_frais_notaire";
+  }
+
+  // T15 -- Patterns zonage immobilier (avant DVF)
+  const zonagePatterns = [
+    /\bzone\s+(abc|a\s*bis|pinel|tendue|detendue)\b/,
+    /\bzonage\b.*\b(immobilier|abc|pinel|logement)\b/,
+    /\bptz\b.*\b(eligible|zone|commune)\b/,
+    /\bpinel\b.*\b(eligible|zone|commune)\b/,
+    /\bdenormandie\b.*\b(eligible|zone)\b/,
+    /\bplafond\b.*\b(loyer|ressource).*\b(pinel|zone)\b/,
+    /\bzone\b.*\b(b1|b2|abis)\b/,
+    /\blli\b.*\beligible\b/,
+  ];
+
+  for (const pattern of zonagePatterns) {
+    if (pattern.test(q)) return "zonage_immobilier";
   }
 
   // Patterns DVF / immobilier
@@ -119,7 +181,7 @@ export function classifyQuery(query: string): QueryCategory {
     if (pattern.test(q)) return "transactions_dvf";
   }
 
-  // Patterns fiscalité locale
+  // Patterns fiscalite locale
   const fiscaliteLocalePatterns = [
     /\btaux\b.*\bfoncier/,
     /\btaxe\s+foncier/,
@@ -159,7 +221,7 @@ export function classifyQuery(query: string): QueryCategory {
   return "fiches_dila";
 }
 
-/** Tente d'extraire un nom de commune de la requête */
+/** Tente d'extraire un nom de commune de la requete */
 export function extractCommuneName(query: string): string | null {
   const patterns = [
     /(?:commune\s+de|ville\s+de|taux\s+(?:a|\u00e0|de|pour)|prix\s+(?:a|\u00e0|de|pour))\s+([a-z\u00e0\u00e2\u00e4\u00e9\u00e8\u00ea\u00eb\u00ef\u00ee\u00f4\u00f9\u00fb\u00fc\u00ff\u00e7\s-]{2,30})/i,
@@ -180,23 +242,54 @@ export function extractCommuneName(query: string): string | null {
   const upperWords = query.match(/\b[A-Z\u00c0\u00c2\u00c4\u00c9\u00c8\u00ca\u00cb\u00cf\u00ce\u00d4\u00d9\u00db\u00dc\u0178\u00c7]{2,}(?:\s+[A-Z\u00c0\u00c2\u00c4\u00c9\u00c8\u00ca\u00cb\u00cf\u00ce\u00d4\u00d9\u00db\u00dc\u0178\u00c7]{2,})*\b/g);
   if (upperWords?.length) {
     const candidate = upperWords[0];
-    const stopUpper = ["TFB", "TFNB", "TEOM", "CFE", "TH", "TVA", "IR", "IS", "BOFIP", "REI", "DVF", "TF"];
+    const stopUpper = ["TFB", "TFNB", "TEOM", "CFE", "TH", "TVA", "IR", "IS", "BOFIP", "REI", "DVF", "TF", "DMTO", "PTZ", "LLI", "ABC"];
     if (!stopUpper.includes(candidate)) return candidate;
   }
 
   return null;
 }
 
-/** Extrait le type de bien immobilier de la requête */
+/** Extrait le type de bien immobilier de la requete */
 export function extractTypeLocal(query: string): string | null {
   const q = query.toLowerCase();
   if (/\bappartement/.test(q)) return "Appartement";
   if (/\bmaison/.test(q)) return "Maison";
-  if (/\blocal/.test(q)) return "Local industriel. commercial ou assimilé";
+  if (/\blocal/.test(q)) return "Local industriel. commercial ou assimile";
   return null;
 }
 
-/** T7 — Extrait une surface en m² de la requête */
+/** T15 -- Extrait un prix en euros de la requete */
+export function extractPrix(query: string): number | null {
+  // "250000 euros", "250 000 EUR", "250000EUR"
+  const matchEuro = query.match(/(\d[\d\s.,]*\d)\s*(?:\u20ac|euros?|eur)\b/i);
+  if (matchEuro) {
+    const val = parseNumberFr(matchEuro[1]);
+    if (val > 0 && val < 100_000_000) return val;
+  }
+  // "250k", "250k EUR"
+  const matchK = query.match(/(\d+)\s*k\s*(?:\u20ac|euros?|eur)?\b/i);
+  if (matchK) {
+    const val = parseInt(matchK[1], 10) * 1000;
+    if (val > 0 && val < 100_000_000) return val;
+  }
+  // Nombre seul > 10000 dans un contexte frais notaire (deja route)
+  const matchBare = query.match(/\b(\d{5,8})\b/);
+  if (matchBare) {
+    const val = parseInt(matchBare[1], 10);
+    if (val >= 10_000 && val < 100_000_000) return val;
+  }
+  return null;
+}
+
+/** T15 -- Extrait le type d'achat ancien/neuf */
+export function extractTypeAchat(query: string): "ancien" | "neuf" | null {
+  const q = query.toLowerCase();
+  if (/\bneuf\b/.test(q) || /\bvefa\b/.test(q)) return "neuf";
+  if (/\bancien\b/.test(q)) return "ancien";
+  return null;
+}
+
+/** Extrait une surface en m2 de la requete */
 function extractSurface(query: string): number | null {
   const match = query.match(/(\d+)\s*m[\u00b22]?\b/i);
   if (match) {
@@ -206,12 +299,18 @@ function extractSurface(query: string): number | null {
   return null;
 }
 
-/** T7 — Extrait le type de bien (Maison/Appartement) de la requête */
+/** Extrait le type de bien (Maison/Appartement) */
 function extractTypeBien(query: string): "Maison" | "Appartement" | null {
   const q = query.toLowerCase();
   if (/\bmaison\b/.test(q)) return "Maison";
   if (/\b(appartement|appart|studio|f[1-6]|t[1-6])\b/.test(q)) return "Appartement";
   return null;
+}
+
+/** Nettoie et parse un nombre au format FR ("250 000" ou "250.000" ou "250,000") */
+function parseNumberFr(raw: string): number {
+  const cleaned = raw.replace(/[\s.,]/g, "");
+  return parseInt(cleaned, 10) || 0;
 }
 
 function prefixResult(result: ToolResult, sourceLabel: string): ToolResult {

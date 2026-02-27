@@ -3,55 +3,86 @@ import {
   classifyQuery,
   extractCommuneName,
   extractTypeLocal,
+  extractPrix,
+  extractTypeAchat,
 } from "../rechercher.js";
 
 describe("classifyQuery", () => {
-  it("route les requ\u00eates DVF / immobilier", () => {
-    expect(classifyQuery("prix immobilier \u00e0 Lyon")).toBe("transactions_dvf");
-    expect(classifyQuery("prix au m2 \u00e0 Bordeaux")).toBe("transactions_dvf");
-    expect(classifyQuery("acheter un appartement \u00e0 Paris")).toBe("transactions_dvf");
-    expect(classifyQuery("combien coute une maison \u00e0 Nantes")).toBe("transactions_dvf");
+  it("route les requetes DVF / immobilier", () => {
+    expect(classifyQuery("prix immobilier a Lyon")).toBe("transactions_dvf");
+    expect(classifyQuery("prix au m2 a Bordeaux")).toBe("transactions_dvf");
+    expect(classifyQuery("acheter un appartement a Paris")).toBe("transactions_dvf");
+    expect(classifyQuery("combien coute une maison a Nantes")).toBe("transactions_dvf");
   });
 
-  it("route les requ\u00eates fiscalit\u00e9 locale", () => {
-    expect(classifyQuery("taux foncier \u00e0 Lyon")).toBe("fiscalite_locale");
-    expect(classifyQuery("taxe fonci\u00e8re Marseille")).toBe("fiscalite_locale");
-    expect(classifyQuery("taux TEOM \u00e0 Bondy")).toBe("fiscalite_locale");
+  it("route les requetes fiscalite locale", () => {
+    expect(classifyQuery("taux foncier a Lyon")).toBe("fiscalite_locale");
+    expect(classifyQuery("taxe fonciere Marseille")).toBe("fiscalite_locale");
+    expect(classifyQuery("taux TEOM a Bondy")).toBe("fiscalite_locale");
   });
 
-  it("route les requ\u00eates simulation TF", () => {
-    expect(classifyQuery("combien de taxe fonci\u00e8re pour un appartement de 60m2 \u00e0 Lyon")).toBe("simulation_tf");
-    expect(classifyQuery("estimer ma taxe fonci\u00e8re")).toBe("simulation_tf");
+  it("route les requetes simulation TF", () => {
+    expect(classifyQuery("combien de taxe fonciere pour un appartement de 60m2 a Lyon")).toBe("simulation_tf");
+    expect(classifyQuery("estimer ma taxe fonciere")).toBe("simulation_tf");
     expect(classifyQuery("simuler TF 80m\u00b2 maison Bordeaux")).toBe("simulation_tf");
   });
 
-  it("route les requ\u00eates doctrine BOFiP", () => {
-    expect(classifyQuery("cr\u00e9dit d'imp\u00f4t recherche")).toBe("doctrine_bofip");
-    expect(classifyQuery("exon\u00e9ration plus-value immobili\u00e8re")).toBe("doctrine_bofip");
-    expect(classifyQuery("r\u00e9gime fiscal micro-entreprise")).toBe("doctrine_bofip");
+  it("route les requetes doctrine BOFiP", () => {
+    expect(classifyQuery("credit d'impot recherche")).toBe("doctrine_bofip");
+    expect(classifyQuery("exoneration plus-value immobiliere")).toBe("doctrine_bofip");
+    expect(classifyQuery("regime fiscal micro-entreprise")).toBe("doctrine_bofip");
   });
 
-  it("route par d\u00e9faut vers fiches DILA", () => {
+  it("route par defaut vers fiches DILA", () => {
     expect(classifyQuery("renouveler passeport")).toBe("fiches_dila");
     expect(classifyQuery("allocation logement")).toBe("fiches_dila");
-    expect(classifyQuery("inscription \u00e9cole")).toBe("fiches_dila");
+    expect(classifyQuery("inscription ecole")).toBe("fiches_dila");
+  });
+
+  // T15 -- Frais de notaire
+  it("route les requetes frais de notaire", () => {
+    expect(classifyQuery("frais de notaire pour 250000 euros")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("combien de frais notaire")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("simuler frais de notaire ancien")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("droits de mutation achat")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("DMTO sur un bien")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("cout notaire 300000")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("emoluments notaire")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("frais d'acquisition immobilier")).toBe("simulation_frais_notaire");
+  });
+
+  // T15 -- Zonage immobilier
+  it("route les requetes zonage immobilier", () => {
+    expect(classifyQuery("zone Pinel Lyon")).toBe("zonage_immobilier");
+    expect(classifyQuery("zone ABC de Bordeaux")).toBe("zonage_immobilier");
+    expect(classifyQuery("PTZ eligible a Nantes")).toBe("zonage_immobilier");
+    expect(classifyQuery("zonage immobilier Paris")).toBe("zonage_immobilier");
+    expect(classifyQuery("zone tendue Marseille")).toBe("zonage_immobilier");
+    expect(classifyQuery("Denormandie eligible Lille")).toBe("zonage_immobilier");
+    expect(classifyQuery("zone B1 commune")).toBe("zonage_immobilier");
+  });
+
+  // Priorite : frais notaire avant DVF
+  it("priorise frais notaire sur DVF quand les deux matchent", () => {
+    expect(classifyQuery("frais de notaire achat immobilier")).toBe("simulation_frais_notaire");
+    expect(classifyQuery("droits de mutation vente")).toBe("simulation_frais_notaire");
   });
 });
 
 describe("extractCommuneName", () => {
-  it("extrait un nom de commune apr\u00e8s '\u00e0'", () => {
-    expect(extractCommuneName("prix \u00e0 Lyon")).toBe("LYON");
+  it("extrait un nom de commune apres 'a'", () => {
+    expect(extractCommuneName("prix a Lyon")).toBe("LYON");
   });
 
-  it("extrait un nom de commune apr\u00e8s 'de'", () => {
+  it("extrait un nom de commune apres 'de'", () => {
     expect(extractCommuneName("taux de Marseille")).toBe("MARSEILLE");
   });
 
-  it("reconna\u00eet les noms en majuscules", () => {
+  it("reconnait les noms en majuscules", () => {
     expect(extractCommuneName("taux PARIS")).toBe("PARIS");
   });
 
-  it("retourne null si pas de commune trouv\u00e9e", () => {
+  it("retourne null si pas de commune trouvee", () => {
     expect(extractCommuneName("renouveler passeport")).toBeNull();
   });
 
@@ -59,18 +90,75 @@ describe("extractCommuneName", () => {
     expect(extractCommuneName("taux TFB")).toBeNull();
     expect(extractCommuneName("taux TEOM")).toBeNull();
   });
+
+  // T15 -- Nouveaux acronymes ignores
+  it("ignore les acronymes immobiliers", () => {
+    expect(extractCommuneName("taux DMTO")).toBeNull();
+    expect(extractCommuneName("PTZ eligible")).toBeNull();
+    expect(extractCommuneName("zone ABC")).toBeNull();
+  });
 });
 
 describe("extractTypeLocal", () => {
-  it("d\u00e9tecte appartement", () => {
+  it("detecte appartement", () => {
     expect(extractTypeLocal("prix d'un appartement")).toBe("Appartement");
   });
 
-  it("d\u00e9tecte maison", () => {
+  it("detecte maison", () => {
     expect(extractTypeLocal("acheter une maison")).toBe("Maison");
   });
 
   it("retourne null si pas de type", () => {
     expect(extractTypeLocal("prix immobilier")).toBeNull();
+  });
+});
+
+// T15 -- Tests extractPrix
+describe("extractPrix", () => {
+  it("extrait un prix avec symbole euro", () => {
+    expect(extractPrix("frais de notaire pour 250000\u20ac")).toBe(250000);
+  });
+
+  it("extrait un prix avec 'euros'", () => {
+    expect(extractPrix("frais notaire 300000 euros")).toBe(300000);
+  });
+
+  it("extrait un prix avec espaces (format FR)", () => {
+    expect(extractPrix("250 000\u20ac de frais")).toBe(250000);
+  });
+
+  it("extrait un prix en k", () => {
+    expect(extractPrix("notaire pour 250k")).toBe(250000);
+  });
+
+  it("extrait un nombre nu > 10000", () => {
+    expect(extractPrix("frais notaire 350000 ancien")).toBe(350000);
+  });
+
+  it("retourne null sans prix", () => {
+    expect(extractPrix("frais de notaire")).toBeNull();
+  });
+
+  it("retourne null pour petit nombre", () => {
+    expect(extractPrix("frais notaire 50")).toBeNull();
+  });
+});
+
+// T15 -- Tests extractTypeAchat
+describe("extractTypeAchat", () => {
+  it("detecte ancien", () => {
+    expect(extractTypeAchat("achat ancien 250000")).toBe("ancien");
+  });
+
+  it("detecte neuf", () => {
+    expect(extractTypeAchat("bien neuf 300000")).toBe("neuf");
+  });
+
+  it("detecte VEFA comme neuf", () => {
+    expect(extractTypeAchat("achat VEFA")).toBe("neuf");
+  });
+
+  it("retourne null si absent", () => {
+    expect(extractTypeAchat("frais notaire 250000")).toBeNull();
   });
 });
