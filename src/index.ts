@@ -16,8 +16,9 @@ import { rechercherConventionCollective } from "./tools/rechercher-convention-co
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
+import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -434,10 +435,11 @@ export default {
     if (url.pathname === "/" && request.method === "GET") {
       return Response.json({
         name: "mcp-service-public",
-        description: "MCP Server pour les données de service-public.fr",
+        description: "MCP Server pour les donnees publiques francaises",
         version: VERSION,
         mcp_endpoint: "/mcp",
         transport: "streamable-http",
+        openapi: "/openapi.json",
         tools: TOOLS.map((t) => t.name),
         source: "https://github.com/OneNicolas/mcp-service-public",
       });
@@ -552,6 +554,18 @@ export default {
           { status: 500 },
         );
       }
+    }
+
+    // T19 — OpenAPI spec (public, pas d'auth)
+    if ((url.pathname === "/openapi.json" || url.pathname === "/openapi") && request.method === "GET") {
+      const spec = generateOpenAPISpec(TOOLS, VERSION);
+      return new Response(JSON.stringify(spec, null, 2), {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
     }
 
     return Response.json({ error: "Not found" }, { status: 404 });

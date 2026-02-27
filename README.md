@@ -181,6 +181,7 @@ Cloudflare Workers (plan payant)
 | POST | `/mcp` | Endpoint MCP (JSON-RPC) |
 | GET | `/health` | Sante du service, version, outils, derniere erreur |
 | GET | `/` | Description du service |
+| GET | `/openapi.json` | Specification OpenAPI 3.1 (public, genere dynamiquement) |
 | GET | `/admin/dashboard` | Dashboard HTML avec statistiques (auth requise) |
 | GET | `/admin/dashboard/api` | API JSON du dashboard (auth requise) |
 | POST | `/admin/sync/full` | Sync complete DILA (auth requise) |
