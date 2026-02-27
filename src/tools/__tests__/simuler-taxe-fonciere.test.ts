@@ -3,6 +3,7 @@ import {
   getSurfacePonderee,
   getCoefEntretien,
   estimerPieces,
+  getExonerationNeuve,
   formatEuro,
   sanitize,
 } from "../simuler-taxe-fonciere.js";
@@ -58,6 +59,35 @@ describe("estimerPieces", () => {
 
   it("retourne au minimum 1 pièce", () => {
     expect(estimerPieces(5, "Appartement")).toBe(1);
+  });
+});
+
+describe("getExonerationNeuve", () => {
+  it("retourne non eligible sans annee de construction", () => {
+    expect(getExonerationNeuve().eligible).toBe(false);
+  });
+
+  it("retourne non eligible pour une construction ancienne", () => {
+    expect(getExonerationNeuve(2010).eligible).toBe(false);
+  });
+
+  it("retourne eligible pour une construction des 2 dernieres annees", () => {
+    const anneeCourante = new Date().getFullYear();
+    const result = getExonerationNeuve(anneeCourante - 1);
+    expect(result.eligible).toBe(true);
+    expect(result.anneesFin).toBe(anneeCourante + 1);
+  });
+
+  it("retourne eligible pour une construction de cette annee", () => {
+    const anneeCourante = new Date().getFullYear();
+    const result = getExonerationNeuve(anneeCourante);
+    expect(result.eligible).toBe(true);
+    expect(result.anneesFin).toBe(anneeCourante + 2);
+  });
+
+  it("retourne non eligible si annee_construction + 2 < annee courante", () => {
+    const anneeCourante = new Date().getFullYear();
+    expect(getExonerationNeuve(anneeCourante - 3).eligible).toBe(false);
   });
 });
 

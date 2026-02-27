@@ -15,7 +15,7 @@ import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 
-const VERSION = "0.9.1";
+const VERSION = "0.9.2";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -143,7 +143,7 @@ const TOOLS = [
   {
     name: "simuler_taxe_fonciere",
     description:
-      "Estime la taxe foncière annuelle d'un bien immobilier. Combine les vrais taux communaux (REI DGFiP) avec une estimation de la valeur locative cadastrale ajustée au marché local via les transactions DVF. Accepte un nom de commune, un code INSEE ou un code postal. Résultat indicatif uniquement.",
+      "Estime la taxe foncière annuelle d'un bien immobilier. Combine les vrais taux communaux (REI DGFiP) avec une estimation de la valeur locative cadastrale ajustée au marché local via les transactions DVF. Accepte un nom de commune, un code INSEE ou un code postal. Décompose les taux par collectivité (commune, EPCI, syndicat, GEMAPI, TSE, TASA). Détecte l'exonération construction neuve 2 ans (art. 1383 CGI). Résultat indicatif uniquement.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -153,7 +153,8 @@ const TOOLS = [
         surface: { type: "number", description: "Surface habitable en m² (ex: 75)" },
         type_bien: { type: "string", enum: ["Maison", "Appartement"], description: "Type de bien immobilier" },
         nombre_pieces: { type: "number", description: "Nombre de pièces principales (optionnel, estimé si absent)" },
-        annee_construction: { type: "number", description: "Année de construction (optionnel, influence le coefficient d'entretien)" },
+        annee_construction: { type: "number", description: "Année de construction (optionnel, influence le coefficient d'entretien et détecte l'exonération 2 ans)" },
+        residence_principale: { type: "boolean", description: "S'il s'agit de la résidence principale (optionnel, affiche les exonérations possibles)" },
       },
       required: ["surface", "type_bien"],
     },
@@ -230,7 +231,7 @@ async function executeTool(
     case "consulter_transactions_immobilieres":
       return consulterTransactionsImmobilieres(args as { commune?: string; code_insee?: string; code_postal?: string; type_local?: string; annee?: number });
     case "simuler_taxe_fonciere":
-      return simulerTaxeFonciere(args as { commune?: string; code_insee?: string; code_postal?: string; surface: number; type_bien: "Maison" | "Appartement"; nombre_pieces?: number; annee_construction?: number });
+      return simulerTaxeFonciere(args as { commune?: string; code_insee?: string; code_postal?: string; surface: number; type_bien: "Maison" | "Appartement"; nombre_pieces?: number; annee_construction?: number; residence_principale?: boolean });
     case "simuler_frais_notaire":
       return simulerFraisNotaire(args as { prix: number; type: "ancien" | "neuf"; departement?: string });
     case "consulter_zonage_immobilier":

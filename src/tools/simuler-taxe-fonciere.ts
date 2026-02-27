@@ -352,10 +352,19 @@ interface SimulationData {
   residencePrincipale: boolean;
 }
 
+// Verifie si le bien est eligible a l'exoneration construction neuve (art. 1383 CGI)
+export function getExonerationNeuve(anneeConstruction?: number): { eligible: boolean; anneesFin?: number } {
+  if (!anneeConstruction) return { eligible: false };
+  const anneeCourante = new Date().getFullYear();
+  const anneesFin = anneeConstruction + 2;
+  if (anneesFin >= anneeCourante) return { eligible: true, anneesFin };
+  return { eligible: false };
+}
+
 function buildSimulationReport(d: SimulationData): string {
   const lines: string[] = [];
 
-  lines.push(`🏠 **Simulation taxe foncière — ${d.communeNom} (${d.communeCode})**`);
+  lines.push(`\uD83C\uDFE0 **Simulation taxe foncière — ${d.communeNom} (${d.communeCode})**`);
   lines.push("");
 
   lines.push("**Caractéristiques du bien :**");
@@ -364,7 +373,18 @@ function buildSimulationReport(d: SimulationData): string {
   lines.push(`  Nombre de pièces : ${d.nbPieces}${d.piecesEstimees ? " (estimé)" : ""}`);
   if (d.anneeConstruction) lines.push(`  Année de construction : ${d.anneeConstruction}`);
   lines.push(`  Surface pondérée : ${d.surfacePonderee} m² (surface + équivalences confort)`);
+  if (d.residencePrincipale) lines.push(`  Résidence principale : oui`);
   lines.push("");
+
+  // Exoneration construction neuve
+  const exoNeuve = getExonerationNeuve(d.anneeConstruction);
+  if (exoNeuve.eligible) {
+    lines.push(`\u2139\uFE0F **Exonération construction neuve (art. 1383 CGI)**`);
+    lines.push(`  Ce bien peut bénéficier d'une exonération de TFB pendant 2 ans (jusqu'au 31/12/${exoNeuve.anneesFin}).`);
+    lines.push(`  L'exonération s'applique sur la part communale (certaines communes la suppriment).`);
+    lines.push(`  La simulation ci-dessous montre le montant hors exonération.`);
+    lines.push("");
+  }
 
   lines.push("**Détail du calcul :**");
   lines.push(`  1. Tarif VLC de base (${d.typeBien}) : ${d.tarifBase} €/m²/an`);
@@ -373,7 +393,17 @@ function buildSimulationReport(d: SimulationData): string {
   lines.push(`  4. Coefficient d'entretien : ×${d.coefEntretien.toFixed(2)} (${d.labelEntretien})`);
   lines.push(`  5. VLC estimée : ${d.surfacePonderee} m² × ${d.tarifAjuste.toFixed(1)} € × ${d.coefEntretien.toFixed(2)} = **${formatEuro(d.vlcEstimee)}**/an`);
   lines.push(`  6. Base imposable : ${formatEuro(d.vlcEstimee)} × 50% = **${formatEuro(d.baseImposable)}**`);
-  lines.push(`  7. Taux global TFB (${d.communeNom}, ${d.exercice}) : **${d.tauxTFB} %**`);
+  lines.push("");
+
+  // Decomposition des taux et montants par collectivite
+  lines.push(`**Décomposition des taux TFB (${d.communeNom}, ${d.exercice}) :**`);
+  const tauxDetails = buildTauxDetails(d);
+  for (const t of tauxDetails) {
+    if (t.taux > 0) {
+      lines.push(`  ${t.label} : ${t.taux.toFixed(2)} % → **${formatEuro(t.montant)}**`);
+    }
+  }
+  lines.push(`  **Total TFB : ${d.tauxTFB.toFixed(2)} % → ${formatEuro(d.tfEstimee)}**`);
   lines.push("");
 
   lines.push(`**➡️ Taxe foncière estimée : ${formatEuro(d.tfEstimee)} / an**`);
@@ -383,6 +413,17 @@ function buildSimulationReport(d: SimulationData): string {
     const teom = d.baseImposable * (d.tauxTEOM / 100);
     lines.push(`  + TEOM estimée (${d.tauxTEOM} %) : ${formatEuro(teom)} / an`);
     lines.push(`  **= Total TF + TEOM : ${formatEuro(d.tfEstimee + teom)} / an**`);
+    lines.push("");
+  }
+
+  // Exonerations possibles
+  if (d.residencePrincipale) {
+    lines.push("**Exonérations possibles (résidence principale) :**");
+    lines.push("  Les propriétaires suivants peuvent être exonérés totalement ou partiellement :");
+    lines.push("  — Personnes de 75 ans et plus sous plafond de revenu fiscal de référence");
+    lines.push("  — Titulaires de l'AAH (allocation aux adultes handicapés)");
+    lines.push("  — Titulaires de l'ASPA (allocation de solidarité aux personnes âgées)");
+    lines.push("  Ces exonérations sont automatiques si les conditions sont remplies.");
     lines.push("");
   }
 
@@ -400,6 +441,25 @@ function buildSimulationReport(d: SimulationData): string {
   lines.push("_Sources : DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr_");
 
   return lines.join("\n");
+}
+
+// Decompose le taux global en contributions par collectivite
+interface TauxDetail {
+  label: string;
+  taux: number;
+  montant: number;
+}
+
+function buildTauxDetails(d: SimulationData): TauxDetail[] {
+  const base = d.baseImposable;
+  return [
+    { label: "Commune", taux: d.tauxCommune, montant: base * d.tauxCommune / 100 },
+    { label: "Intercommunalité (EPCI)", taux: d.tauxInterco, montant: base * d.tauxInterco / 100 },
+    { label: "Syndicat", taux: d.tauxSyndicat, montant: base * d.tauxSyndicat / 100 },
+    { label: "GEMAPI", taux: d.tauxGemapi, montant: base * d.tauxGemapi / 100 },
+    { label: "TSE (spécial équipement)", taux: d.tauxTse, montant: base * d.tauxTse / 100 },
+    { label: "TASA", taux: d.tauxTasa, montant: base * d.tauxTasa / 100 },
+  ];
 }
 
 // --- Utilitaires ---
