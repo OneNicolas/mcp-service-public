@@ -17,11 +17,11 @@ const PTZ_ELIGIBLE: Record<string, boolean> = {
 };
 
 const ZONE_DESCRIPTIONS: Record<string, string> = {
-  "Abis": "Zone tr\u00e8s tendue (Paris et 1\u00e8re couronne)",
-  "A": "Zone tendue (grandes agglom\u00e9rations)",
-  "B1": "Zone moyennement tendue (agglom\u00e9rations > 250 000 hab.)",
+  "Abis": "Zone très tendue (Paris et 1ère couronne)",
+  "A": "Zone tendue (grandes agglomérations)",
+  "B1": "Zone moyennement tendue (agglomérations > 250 000 hab.)",
   "B2": "Zone peu tendue (villes moyennes)",
-  "C": "Zone d\u00e9tendue (reste du territoire)",
+  "C": "Zone détendue (reste du territoire)",
 };
 
 interface ConsulterZonageArgs {
@@ -44,7 +44,7 @@ export async function consulterZonageImmobilier(args: ConsulterZonageArgs): Prom
     const resolved = await resolveCommune(commune, code_insee, code_postal);
     if (!resolved) {
       return {
-        content: [{ type: "text", text: "Impossible de r\u00e9soudre la commune. V\u00e9rifiez le nom, code INSEE ou code postal." }],
+        content: [{ type: "text", text: "Impossible de résoudre la commune. Vérifiez le nom, code INSEE ou code postal." }],
         isError: true,
       };
     }
@@ -54,7 +54,7 @@ export async function consulterZonageImmobilier(args: ConsulterZonageArgs): Prom
       return {
         content: [{
           type: "text",
-          text: `Aucune donn\u00e9e de zonage trouv\u00e9e pour ${resolved.nom} (${resolved.code}). La commune n'est peut-\u00eatre pas r\u00e9f\u00e9renc\u00e9e dans le fichier officiel.`,
+          text: `Aucune donnée de zonage trouvée pour ${resolved.nom} (${resolved.code}). La commune n'est peut-être pas référencée dans le fichier officiel.`,
         }],
         isError: true,
       };
@@ -123,9 +123,9 @@ async function resolveCommune(
 function buildReport(nom: string, code: string, zone: string): string {
   const lines: string[] = [];
 
-  lines.push(`\ud83d\udccd **Zonage immobilier \u2014 ${nom} (${code})**`);
+  lines.push(`📍 **Zonage immobilier — ${nom} (${code})**`);
   lines.push("");
-  lines.push(`**Zone : ${zone}** \u2014 ${ZONE_DESCRIPTIONS[zone] ?? "Classification inconnue"}`);
+  lines.push(`**Zone : ${zone}** — ${ZONE_DESCRIPTIONS[zone] ?? "Classification inconnue"}`);
   lines.push("");
 
   const plafondLoyer = PLAFONDS_LOYERS[zone];
@@ -133,24 +133,24 @@ function buildReport(nom: string, code: string, zone: string): string {
   const ptzEligible = PTZ_ELIGIBLE[zone];
 
   lines.push("**Plafonds 2025 :**");
-  if (plafondLoyer) lines.push(`  Loyer Pinel max : ${plafondLoyer.toFixed(2)} \u20ac/m\u00b2/mois (hors charges)`);
+  if (plafondLoyer) lines.push(`  Loyer Pinel max : ${plafondLoyer.toFixed(2)} €/m²/mois (hors charges)`);
   if (plafondRessources) lines.push(`  Ressources locataire max (personne seule) : ${formatEuro(plafondRessources)}`);
   lines.push("");
 
-  lines.push("**\u00c9ligibilit\u00e9 dispositifs :**");
-  lines.push(`  PTZ (neuf) : ${ptzEligible ? "\u2705 \u00c9ligible" : "\u274c Non \u00e9ligible"}`);
+  lines.push("**Éligibilité dispositifs :**");
+  lines.push(`  PTZ (neuf) : ${ptzEligible ? "✅ Éligible" : "❌ Non éligible"}`);
   const pinelEligible = zone === "Abis" || zone === "A" || zone === "B1";
-  lines.push(`  Pinel / Denormandie : ${pinelEligible ? "\u2705 \u00c9ligible" : "\u274c Non \u00e9ligible (zones B2/C)"}`);
+  lines.push(`  Pinel / Denormandie : ${pinelEligible ? "✅ Éligible" : "❌ Non éligible (zones B2/C)"}`);
   const lliEligible = zone === "Abis" || zone === "A" || zone === "B1";
-  lines.push(`  Logement locatif interm\u00e9diaire (LLI) : ${lliEligible ? "\u2705 \u00c9ligible" : "\u274c Non \u00e9ligible"}`);
+  lines.push(`  Logement locatif intermédiaire (LLI) : ${lliEligible ? "✅ Éligible" : "❌ Non éligible"}`);
   lines.push("");
 
   lines.push("**Signification du zonage :**");
-  lines.push("  Le zonage ABC classe les communes selon la tension du march\u00e9 du logement.");
-  lines.push("  Il d\u00e9termine l'\u00e9ligibilit\u00e9 aux aides (PTZ, Pinel, PLS) et les plafonds");
+  lines.push("  Le zonage ABC classe les communes selon la tension du marché du logement.");
+  lines.push("  Il détermine l'éligibilité aux aides (PTZ, Pinel, PLS) et les plafonds");
   lines.push("  de loyers et de ressources pour les dispositifs d'investissement locatif.");
   lines.push("");
-  lines.push("_Source : Minist\u00e8re de la Transition \u00e9cologique, arr\u00eat\u00e9 du 05/09/2025 (art. D304-1 CCH) via data.gouv.fr_");
+  lines.push("_Source : Ministère de la Transition écologique, arrêté du 05/09/2025 (art. D304-1 CCH) via data.gouv.fr_");
 
   return lines.join("\n");
 }

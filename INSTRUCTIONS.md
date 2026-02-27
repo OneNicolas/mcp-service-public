@@ -87,17 +87,18 @@ src/
 | T13 | Config build `wrangler.toml` (section `[build]`) | ✅ |
 | T14 | Monitoring `/health` enrichi (version, tools_count, last_error) | ✅ |
 
-## Sprint 6 — En cours
+## Sprint 6 — Complété ✅
 
 | Tâche | Description | Statut |
 |-------|-------------|--------|
 | T15 | Intégrer `simuler_frais_notaire` et `consulter_zonage_immobilier` dans le dispatch `rechercher.ts` | ✅ |
 | T16 | Taux DMTO par département (map statique 101 départements, source LF 2025 art. 116) | ✅ |
 | T17 | Enrichir `comparer_communes` avec les services publics locaux (API Annuaire) | ✅ |
-| T18 | Cache des résultats fréquents (zones ABC, taux REI) avec Cloudflare Cache API | ⏳ |
+| T18 | Cache Cloudflare | ❌ Reporté — évaluer le besoin réel avant |
 
 ## Sprint 7 — Roadmap
 
+- **T18** — Évaluer le besoin de cache (mesurer les temps de réponse actuels avant d'implémenter)
 - **T19** — OpenAPI / JSON Schema pour documentation auto des outils
 - **T20** — Dashboard web `/admin/dashboard` avec statistiques d'usage
 - **T21** — Améliorer le simulateur TF (prise en compte abattements, taux intercommunaux détaillés)

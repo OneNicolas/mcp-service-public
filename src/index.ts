@@ -21,12 +21,12 @@ const TOOLS = [
   {
     name: "rechercher",
     description:
-      "Recherche unifi\u00e9e intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (d\u00e9marches/droits), doctrine fiscale BOFiP, fiscalit\u00e9 locale (taux par commune), transactions immobili\u00e8res DVF, simulation de taxe fonci\u00e8re, simulation de frais de notaire, ou zonage immobilier ABC (Pinel, PTZ). \u00c0 utiliser en premier si la source appropri\u00e9e n'est pas \u00e9vidente.",
+      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), transactions immobilières DVF, simulation de taxe foncière, simulation de frais de notaire, ou zonage immobilier ABC (Pinel, PTZ). À utiliser en premier si la source appropriée n'est pas évidente.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Question ou termes de recherche en langage naturel (ex: 'taxe fonci\u00e8re \u00e0 Lyon', 'renouveler passeport', 'prix immobilier \u00e0 Bondy', 'frais de notaire 250000 euros', 'zone Pinel Bordeaux')" },
-        limit: { type: "number", description: "Nombre de r\u00e9sultats (1-10, d\u00e9faut 5)" },
+        query: { type: "string", description: "Question ou termes de recherche en langage naturel (ex: 'taxe foncière à Lyon', 'renouveler passeport', 'prix immobilier à Bondy', 'frais de notaire 250000 euros', 'zone Pinel Bordeaux')" },
+        limit: { type: "number", description: "Nombre de résultats (1-10, défaut 5)" },
       },
       required: ["query"],
     },
@@ -34,14 +34,14 @@ const TOOLS = [
   {
     name: "rechercher_fiche",
     description:
-      "Recherche dans les fiches pratiques de service-public.fr (droits, d\u00e9marches administratives). Utilise la recherche plein texte.",
+      "Recherche dans les fiches pratiques de service-public.fr (droits, démarches administratives). Utilise la recherche plein texte.",
     inputSchema: {
       type: "object" as const,
       properties: {
         query: { type: "string", description: "Termes de recherche (ex: 'passeport', 'allocation logement')" },
-        theme: { type: "string", description: "Filtrer par th\u00e8me (ex: 'Papiers', 'Logement')" },
+        theme: { type: "string", description: "Filtrer par thème (ex: 'Papiers', 'Logement')" },
         audience: { type: "string", enum: ["Particuliers", "Professionnels", "Associations"], description: "Public cible" },
-        limit: { type: "number", description: "Nombre de r\u00e9sultats (1-20, d\u00e9faut 10)" },
+        limit: { type: "number", description: "Nombre de résultats (1-20, défaut 10)" },
       },
       required: ["query"],
     },
@@ -61,7 +61,7 @@ const TOOLS = [
   {
     name: "rechercher_service_local",
     description:
-      "Recherche un service public local (mairie, pr\u00e9fecture, CAF, CPAM, France Services...) via l'Annuaire de l'administration.",
+      "Recherche un service public local (mairie, préfecture, CAF, CPAM, France Services...) via l'Annuaire de l'administration.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -69,25 +69,25 @@ const TOOLS = [
         code_postal: { type: "string", description: "Code postal (ex: '75001')" },
         commune: { type: "string", description: "Nom de la commune" },
         code_insee: { type: "string", description: "Code INSEE de la commune" },
-        limit: { type: "number", description: "Nombre de r\u00e9sultats (1-20, d\u00e9faut 5)" },
+        limit: { type: "number", description: "Nombre de résultats (1-20, défaut 5)" },
       },
     },
   },
   {
     name: "naviguer_themes",
     description:
-      "Parcourt l'arborescence th\u00e9matique de service-public.fr. Sans param\u00e8tre, liste les th\u00e8mes principaux.",
+      "Parcourt l'arborescence thématique de service-public.fr. Sans paramètre, liste les thèmes principaux.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        theme_id: { type: "string", description: "ID du th\u00e8me \u00e0 explorer (ex: N19810, N360)" },
+        theme_id: { type: "string", description: "ID du thème à explorer (ex: N19810, N360)" },
       },
     },
   },
   {
     name: "consulter_fiscalite_locale",
     description:
-      "Consulte les taux d'imposition locale d'une commune (taxe fonci\u00e8re, taxe d'habitation, TEOM, CFE). Accepte un nom de commune, un code INSEE ou un code postal. Sans exercice pr\u00e9cis\u00e9, affiche l'\u00e9volution sur 4 ans avec tendance. Donn\u00e9es REI de la DGFiP via data.economie.gouv.fr.",
+      "Consulte les taux d'imposition locale d'une commune (taxe foncière, taxe d'habitation, TEOM, CFE). Accepte un nom de commune, un code INSEE ou un code postal. Sans exercice précisé, affiche l'évolution sur 4 ans avec tendance. Données REI de la DGFiP via data.economie.gouv.fr.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -95,14 +95,14 @@ const TOOLS = [
         communes: {
           type: "array",
           items: { type: "string" },
-          description: "Liste de communes \u00e0 comparer (2-5 noms en majuscules, ex: ['PARIS', 'LYON', 'MARSEILLE']). Active le mode comparaison c\u00f4te \u00e0 c\u00f4te.",
+          description: "Liste de communes à comparer (2-5 noms en majuscules, ex: ['PARIS', 'LYON', 'MARSEILLE']). Active le mode comparaison côte à côte.",
           maxItems: 5,
           minItems: 2,
         },
         code_insee: { type: "string", description: "Code INSEE de la commune (ex: '75056', '69123')" },
-        code_postal: { type: "string", description: "Code postal (ex: '93140', '75001'). R\u00e9sout automatiquement vers le(s) code(s) INSEE." },
-        exercice: { type: "string", description: "Ann\u00e9e fiscale (ex: '2024'). Sans exercice : affiche l'\u00e9volution sur toutes les ann\u00e9es disponibles." },
-        type: { type: "string", enum: ["particuliers", "entreprises"], description: "Type de fiscalit\u00e9 (d\u00e9faut: particuliers)" },
+        code_postal: { type: "string", description: "Code postal (ex: '93140', '75001'). Résout automatiquement vers le(s) code(s) INSEE." },
+        exercice: { type: "string", description: "Année fiscale (ex: '2024'). Sans exercice : affiche l'évolution sur toutes les années disponibles." },
+        type: { type: "string", enum: ["particuliers", "entreprises"], description: "Type de fiscalité (défaut: particuliers)" },
       },
     },
   },
@@ -113,9 +113,9 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Termes de recherche (ex: 'plus-values immobili\u00e8res', 'cr\u00e9dit imp\u00f4t recherche')" },
-        serie: { type: "string", description: "Filtrer par s\u00e9rie BOFiP (ex: 'IR', 'TVA', 'IS', 'RFPI', 'BIC')" },
-        limit: { type: "number", description: "Nombre de r\u00e9sultats (1-10, d\u00e9faut 5)" },
+        query: { type: "string", description: "Termes de recherche (ex: 'plus-values immobilières', 'crédit impôt recherche')" },
+        serie: { type: "string", description: "Filtrer par série BOFiP (ex: 'IR', 'TVA', 'IS', 'RFPI', 'BIC')" },
+        limit: { type: "number", description: "Nombre de résultats (1-10, défaut 5)" },
       },
       required: ["query"],
     },
@@ -123,32 +123,32 @@ const TOOLS = [
   {
     name: "consulter_transactions_immobilieres",
     description:
-      "Consulte les transactions immobili\u00e8res (DVF - Demandes de Valeurs Fonci\u00e8res) d'une commune. Fournit prix m\u00e9dians, prix au m\u00b2, r\u00e9partition par type de bien et nombre de pi\u00e8ces. Donn\u00e9es DGFiP via data.gouv.fr. Hors Alsace, Moselle et Mayotte.",
+      "Consulte les transactions immobilières (DVF - Demandes de Valeurs Foncières) d'une commune. Fournit prix médians, prix au m², répartition par type de bien et nombre de pièces. Données DGFiP via data.gouv.fr. Hors Alsace, Moselle et Mayotte.",
     inputSchema: {
       type: "object" as const,
       properties: {
         commune: { type: "string", description: "Nom de la commune (ex: 'Bondy', 'Lyon')" },
         code_insee: { type: "string", description: "Code INSEE de la commune (ex: '93010')" },
-        code_postal: { type: "string", description: "Code postal (ex: '93140'). R\u00e9sout automatiquement vers le(s) code(s) INSEE." },
-        type_local: { type: "string", enum: ["Appartement", "Maison", "Local industriel. commercial ou assimil\u00e9"], description: "Filtrer par type de bien" },
-        annee: { type: "number", description: "Filtrer sur une ann\u00e9e sp\u00e9cifique (ex: 2024). Par d\u00e9faut : 2 derni\u00e8res ann\u00e9es." },
+        code_postal: { type: "string", description: "Code postal (ex: '93140'). Résout automatiquement vers le(s) code(s) INSEE." },
+        type_local: { type: "string", enum: ["Appartement", "Maison", "Local industriel. commercial ou assimilé"], description: "Filtrer par type de bien" },
+        annee: { type: "number", description: "Filtrer sur une année spécifique (ex: 2024). Par défaut : 2 dernières années." },
       },
     },
   },
   {
     name: "simuler_taxe_fonciere",
     description:
-      "Estime la taxe fonci\u00e8re annuelle d'un bien immobilier. Combine les vrais taux communaux (REI DGFiP) avec une estimation de la valeur locative cadastrale ajust\u00e9e au march\u00e9 local via les transactions DVF. Accepte un nom de commune, un code INSEE ou un code postal. R\u00e9sultat indicatif uniquement.",
+      "Estime la taxe foncière annuelle d'un bien immobilier. Combine les vrais taux communaux (REI DGFiP) avec une estimation de la valeur locative cadastrale ajustée au marché local via les transactions DVF. Accepte un nom de commune, un code INSEE ou un code postal. Résultat indicatif uniquement.",
     inputSchema: {
       type: "object" as const,
       properties: {
         commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bordeaux')" },
         code_insee: { type: "string", description: "Code INSEE de la commune (ex: '69123')" },
-        code_postal: { type: "string", description: "Code postal (ex: '33000'). R\u00e9sout automatiquement vers le code INSEE." },
-        surface: { type: "number", description: "Surface habitable en m\u00b2 (ex: 75)" },
+        code_postal: { type: "string", description: "Code postal (ex: '33000'). Résout automatiquement vers le code INSEE." },
+        surface: { type: "number", description: "Surface habitable en m² (ex: 75)" },
         type_bien: { type: "string", enum: ["Maison", "Appartement"], description: "Type de bien immobilier" },
-        nombre_pieces: { type: "number", description: "Nombre de pi\u00e8ces principales (optionnel, estim\u00e9 si absent)" },
-        annee_construction: { type: "number", description: "Ann\u00e9e de construction (optionnel, influence le coefficient d'entretien)" },
+        nombre_pieces: { type: "number", description: "Nombre de pièces principales (optionnel, estimé si absent)" },
+        annee_construction: { type: "number", description: "Année de construction (optionnel, influence le coefficient d'entretien)" },
       },
       required: ["surface", "type_bien"],
     },
@@ -156,13 +156,13 @@ const TOOLS = [
   {
     name: "simuler_frais_notaire",
     description:
-      "Estime les frais de notaire (frais d'acquisition) pour un achat immobilier. Calcule les droits de mutation (DMTO), \u00e9moluments du notaire (bar\u00e8me d\u00e9gressif r\u00e9glement\u00e9), contribution de s\u00e9curit\u00e9 immobili\u00e8re et d\u00e9bours. Distingue ancien (7-8 %) et neuf (2-3 %). Si le d\u00e9partement est pr\u00e9cis\u00e9, applique le taux DMTO exact (normal 5,81 % ou major\u00e9 6,32 % selon le d\u00e9partement, LF 2025). Sans d\u00e9partement, affiche les deux hypoth\u00e8ses. Accepte un code d\u00e9partement, un code postal ou un num\u00e9ro de d\u00e9partement.",
+      "Estime les frais de notaire (frais d'acquisition) pour un achat immobilier. Calcule les droits de mutation (DMTO), émoluments du notaire (barème dégressif réglementé), contribution de sécurité immobilière et débours. Distingue ancien (7-8 %) et neuf (2-3 %). Si le département est précisé, applique le taux DMTO exact (normal 5,81 % ou majoré 6,32 % selon le département, LF 2025). Sans département, affiche les deux hypothèses. Accepte un code département, un code postal ou un numéro de département.",
     inputSchema: {
       type: "object" as const,
       properties: {
         prix: { type: "number", description: "Prix d'achat du bien en euros (ex: 250000)" },
         type: { type: "string", enum: ["ancien", "neuf"], description: "Type de bien : ancien ou neuf" },
-        departement: { type: "string", description: "D\u00e9partement (code 2-3 chiffres, code postal 5 chiffres, ou '2A'/'2B' pour la Corse). Permet d'appliquer le taux DMTO exact." },
+        departement: { type: "string", description: "Département (code 2-3 chiffres, code postal 5 chiffres, ou '2A'/'2B' pour la Corse). Permet d'appliquer le taux DMTO exact." },
       },
       required: ["prix", "type"],
     },
@@ -170,27 +170,27 @@ const TOOLS = [
   {
     name: "consulter_zonage_immobilier",
     description:
-      "Consulte la zone ABC d'une commune (A bis, A, B1, B2, C) utilis\u00e9e pour les dispositifs immobiliers (Pinel, PTZ, plafonds loyers). Accepte un nom de commune, un code INSEE ou un code postal. Retourne la zone, les plafonds de loyer, les plafonds de ressources et l'\u00e9ligibilit\u00e9 aux dispositifs. Source : Minist\u00e8re de la Transition \u00e9cologique via data.gouv.fr.",
+      "Consulte la zone ABC d'une commune (A bis, A, B1, B2, C) utilisée pour les dispositifs immobiliers (Pinel, PTZ, plafonds loyers). Accepte un nom de commune, un code INSEE ou un code postal. Retourne la zone, les plafonds de loyer, les plafonds de ressources et l'éligibilité aux dispositifs. Source : Ministère de la Transition écologique via data.gouv.fr.",
     inputSchema: {
       type: "object" as const,
       properties: {
         commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bordeaux')" },
         code_insee: { type: "string", description: "Code INSEE de la commune (ex: '69123')" },
-        code_postal: { type: "string", description: "Code postal (ex: '33000'). R\u00e9sout automatiquement vers le code INSEE." },
+        code_postal: { type: "string", description: "Code postal (ex: '33000'). Résout automatiquement vers le code INSEE." },
       },
     },
   },
   {
     name: "comparer_communes",
     description:
-      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
+      "Compare 2 à 5 communes sur un tableau croisé : fiscalité locale (taux TFB, TEOM), prix immobiliers (DVF médian/m² appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...) et intercommunalité. Aide à la décision pour un déménagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
     inputSchema: {
       type: "object" as const,
       properties: {
         communes: {
           type: "array",
           items: { type: "string" },
-          description: "Liste de 2 \u00e0 5 communes \u00e0 comparer (noms, codes postaux ou codes INSEE). Ex: ['Lyon', 'Bordeaux', 'Nantes']",
+          description: "Liste de 2 à 5 communes à comparer (noms, codes postaux ou codes INSEE). Ex: ['Lyon', 'Bordeaux', 'Nantes']",
           minItems: 2,
           maxItems: 5,
         },
@@ -350,7 +350,7 @@ export default {
     if (url.pathname === "/" && request.method === "GET") {
       return Response.json({
         name: "mcp-service-public",
-        description: "MCP Server pour les donn\u00e9es de service-public.fr",
+        description: "MCP Server pour les données de service-public.fr",
         version: VERSION,
         mcp_endpoint: "/mcp",
         transport: "streamable-http",

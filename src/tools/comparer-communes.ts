@@ -255,7 +255,7 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const lines: string[] = [];
   const nbCommunes = data.length;
 
-  lines.push(`\ud83d\udcca **Comparaison de ${nbCommunes} communes**`);
+  lines.push(`📊 **Comparaison de ${nbCommunes} communes**`);
   lines.push("");
 
   const header = ["Indicateur", ...data.map((d) => `**${d.nom}**`)];
@@ -267,8 +267,8 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const exercice = data[0]?.exercice ?? "";
   lines.push(`| Taux TFB (${exercice}) | ${data.map((d) => d.tauxTFB ? `${d.tauxTFB} %` : "N/A").join(" | ")} |`);
   lines.push(`| Taux TEOM | ${data.map((d) => d.tauxTEOM ? `${d.tauxTEOM} %` : "N/A").join(" | ")} |`);
-  lines.push(`| Prix median/m\u00b2 appart. | ${data.map((d) => d.prixM2Appart ? formatEuro(d.prixM2Appart) : "N/A").join(" | ")} |`);
-  lines.push(`| Prix median/m\u00b2 maison | ${data.map((d) => d.prixM2Maison ? formatEuro(d.prixM2Maison) : "N/A").join(" | ")} |`);
+  lines.push(`| Prix median/m² appart. | ${data.map((d) => d.prixM2Appart ? formatEuro(d.prixM2Appart) : "N/A").join(" | ")} |`);
+  lines.push(`| Prix median/m² maison | ${data.map((d) => d.prixM2Maison ? formatEuro(d.prixM2Maison) : "N/A").join(" | ")} |`);
   lines.push(`| Transactions DVF (2 ans) | ${data.map((d) => d.nbTransactions > 0 ? String(d.nbTransactions) : "N/A").join(" | ")} |`);
   lines.push(`| Zone ABC | ${data.map((d) => d.zone ?? "N/A").join(" | ")} |`);
   lines.push(`| Services publics | ${data.map((d) => d.servicesCount !== null ? String(d.servicesCount) : "N/A").join(" | ")} |`);
@@ -279,28 +279,28 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const withTFB = data.filter((d) => d.tauxTFB && d.tauxTFB !== "N/A");
   if (withTFB.length >= 2) {
     const minTFB = withTFB.reduce((a, b) => Number(a.tauxTFB) < Number(b.tauxTFB) ? a : b);
-    lines.push(`  \ud83c\udfc6 Taxe fonciere la plus basse : **${minTFB.nom}** (${minTFB.tauxTFB} %)`);
+    lines.push(`  🏆 Taxe fonciere la plus basse : **${minTFB.nom}** (${minTFB.tauxTFB} %)`);
   }
   const withAppart = data.filter((d) => d.prixM2Appart);
   if (withAppart.length >= 2) {
     const minPrix = withAppart.reduce((a, b) => (a.prixM2Appart ?? Infinity) < (b.prixM2Appart ?? Infinity) ? a : b);
-    lines.push(`  \ud83c\udfc6 Appartements les moins chers : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Appart!)}/m\u00b2)`);
+    lines.push(`  🏆 Appartements les moins chers : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Appart!)}/m²)`);
   }
   const withMaison = data.filter((d) => d.prixM2Maison);
   if (withMaison.length >= 2) {
     const minPrix = withMaison.reduce((a, b) => (a.prixM2Maison ?? Infinity) < (b.prixM2Maison ?? Infinity) ? a : b);
-    lines.push(`  \ud83c\udfc6 Maisons les moins cheres : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Maison!)}/m\u00b2)`);
+    lines.push(`  🏆 Maisons les moins cheres : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Maison!)}/m²)`);
   }
   // T17 -- Services publics
   const withServices = data.filter((d) => d.servicesCount !== null && d.servicesCount > 0);
   if (withServices.length >= 2) {
     const maxServices = withServices.reduce((a, b) => (a.servicesCount ?? 0) > (b.servicesCount ?? 0) ? a : b);
-    lines.push(`  \ud83c\udfc6 Plus de services publics : **${maxServices.nom}** (${maxServices.servicesCount} organismes)`);
+    lines.push(`  🏆 Plus de services publics : **${maxServices.nom}** (${maxServices.servicesCount} organismes)`);
   }
   lines.push("");
 
   if (errors.length > 0) {
-    lines.push(`\u26a0\ufe0f Communes non trouvees : ${errors.join(", ")}`);
+    lines.push(`⚠️ Communes non trouvees : ${errors.join(", ")}`);
     lines.push("");
   }
 

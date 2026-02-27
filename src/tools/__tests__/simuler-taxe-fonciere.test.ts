@@ -8,22 +8,22 @@ import {
 } from "../simuler-taxe-fonciere.js";
 
 describe("getSurfacePonderee", () => {
-  it("ajoute les \u00e9quivalences confort (2m\u00b2/pi\u00e8ce + 12m\u00b2 sanitaires)", () => {
+  it("ajoute les équivalences confort (2m²/pièce + 12m² sanitaires)", () => {
     expect(getSurfacePonderee(70, 3)).toBe(70 + 3 * 2 + 12);
   });
 
-  it("fonctionne pour un studio (1 pi\u00e8ce)", () => {
+  it("fonctionne pour un studio (1 pièce)", () => {
     expect(getSurfacePonderee(25, 1)).toBe(25 + 1 * 2 + 12);
   });
 });
 
 describe("getCoefEntretien", () => {
-  it("retourne 1.0 standard si pas d'ann\u00e9e", () => {
+  it("retourne 1.0 standard si pas d'année", () => {
     const result = getCoefEntretien();
     expect(result.coef).toBe(1.0);
   });
 
-  it("retourne 1.15 pour construction r\u00e9cente (>= 2010)", () => {
+  it("retourne 1.15 pour construction récente (>= 2010)", () => {
     expect(getCoefEntretien(2020).coef).toBe(1.15);
     expect(getCoefEntretien(2010).coef).toBe(1.15);
   });
@@ -45,18 +45,18 @@ describe("getCoefEntretien", () => {
 });
 
 describe("estimerPieces", () => {
-  it("estime les pi\u00e8ces d'un appartement (20m\u00b2/pi\u00e8ce)", () => {
+  it("estime les pièces d'un appartement (20m²/pièce)", () => {
     expect(estimerPieces(60, "Appartement")).toBe(3);
     expect(estimerPieces(25, "Appartement")).toBe(1);
     expect(estimerPieces(100, "Appartement")).toBe(5);
   });
 
-  it("estime les pi\u00e8ces d'une maison (25m\u00b2/pi\u00e8ce)", () => {
+  it("estime les pièces d'une maison (25m²/pièce)", () => {
     expect(estimerPieces(75, "Maison")).toBe(3);
     expect(estimerPieces(125, "Maison")).toBe(5);
   });
 
-  it("retourne au minimum 1 pi\u00e8ce", () => {
+  it("retourne au minimum 1 pièce", () => {
     expect(estimerPieces(5, "Appartement")).toBe(1);
   });
 });
@@ -66,23 +66,23 @@ describe("formatEuro", () => {
     const result = formatEuro(1234);
     expect(result).toContain("1");
     expect(result).toContain("234");
-    expect(result).toContain("\u20ac");
+    expect(result).toContain("€");
   });
 
-  it("arrondit \u00e0 l'entier", () => {
+  it("arrondit à l'entier", () => {
     const result = formatEuro(1234.567);
     expect(result).not.toContain("567");
   });
 });
 
 describe("sanitize", () => {
-  it("supprime les caract\u00e8res dangereux pour les requ\u00eates", () => {
+  it("supprime les caractères dangereux pour les requêtes", () => {
     expect(sanitize("test'value")).toBe("testvalue");
     expect(sanitize('test"value')).toBe("testvalue");
     expect(sanitize("test\\value")).toBe("testvalue");
   });
 
-  it("laisse passer les caract\u00e8res normaux", () => {
+  it("laisse passer les caractères normaux", () => {
     expect(sanitize("75056")).toBe("75056");
     expect(sanitize("PARIS")).toBe("PARIS");
   });

@@ -118,7 +118,7 @@ export function calculerEmoluments(prix: number): {
     detail.push({
       tranche: plafond === Infinity
         ? `Au-dela de ${formatEuro(seuil)}`
-        : `${formatEuro(seuil)} \u2192 ${formatEuro(plafond)}`,
+        : `${formatEuro(seuil)} → ${formatEuro(plafond)}`,
       montant,
     });
 
@@ -177,7 +177,7 @@ export async function simulerFraisNotaire(args: SimulerFraisNotaireArgs): Promis
 
   if (!prix || prix <= 0) {
     return {
-      content: [{ type: "text", text: "Le prix d'achat doit etre superieur a 0 \u20ac." }],
+      content: [{ type: "text", text: "Le prix d'achat doit etre superieur a 0 €." }],
       isError: true,
     };
   }
@@ -252,7 +252,7 @@ interface ReportData {
 function buildReport(d: ReportData): string {
   const lines: string[] = [];
 
-  lines.push(`\ud83c\udfe0 **Simulation frais de notaire \u2014 Bien ${d.type}**`);
+  lines.push(`🏠 **Simulation frais de notaire — Bien ${d.type}**`);
   lines.push("");
   lines.push(`**Prix d'achat : ${formatEuro(d.prix)}**`);
   if (d.departement) lines.push(`  Departement : ${d.departement}`);
@@ -296,20 +296,20 @@ function buildReport(d: ReportData): string {
   lines.push("");
 
   if (d.dmtoInfo.isExact || d.type === "neuf") {
-    lines.push(`**\u27a1\ufe0f Estimation frais de notaire : ${formatEuro(d.resultPrincipal.total)} (${d.resultPrincipal.pourcentagePrix.toFixed(1)} % du prix)**`);
+    lines.push(`**➡️ Estimation frais de notaire : ${formatEuro(d.resultPrincipal.total)} (${d.resultPrincipal.pourcentagePrix.toFixed(1)} % du prix)**`);
   } else {
-    lines.push(`**\u27a1\ufe0f Estimation frais de notaire (taux normal) : ${formatEuro(d.resultPrincipal.total)} (${d.resultPrincipal.pourcentagePrix.toFixed(1)} % du prix)**`);
+    lines.push(`**➡️ Estimation frais de notaire (taux normal) : ${formatEuro(d.resultPrincipal.total)} (${d.resultPrincipal.pourcentagePrix.toFixed(1)} % du prix)**`);
     if (d.resultAlternatif) {
-      lines.push(`**\u27a1\ufe0f Estimation frais de notaire (taux majore) : ${formatEuro(d.resultAlternatif.total)} (${d.resultAlternatif.pourcentagePrix.toFixed(1)} % du prix)**`);
+      lines.push(`**➡️ Estimation frais de notaire (taux majore) : ${formatEuro(d.resultAlternatif.total)} (${d.resultAlternatif.pourcentagePrix.toFixed(1)} % du prix)**`);
     }
   }
   lines.push("");
 
-  lines.push("\u26a0\ufe0f **Estimation indicative uniquement.**");
+  lines.push("⚠️ **Estimation indicative uniquement.**");
   lines.push("  Les frais reels dependent du departement, de la situation de l'acquereur");
   lines.push("  (primo-accedant ou non) et des frais specifiques au dossier.");
   lines.push("  Le notaire peut accorder une remise de 20 % sur ses emoluments");
-  lines.push("  pour les biens > 100 000 \u20ac. Demandez un devis a votre notaire.");
+  lines.push("  pour les biens > 100 000 €. Demandez un devis a votre notaire.");
   lines.push("");
   lines.push("_Sources : bareme art. A444-91 Code de commerce (arrete 28/02/2020), taux DMTO art. 1594 D CGI, LF 2025 art. 116_");
 

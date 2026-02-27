@@ -24,7 +24,7 @@ describe("classifyQuery", () => {
   it("route les requetes simulation TF", () => {
     expect(classifyQuery("combien de taxe fonciere pour un appartement de 60m2 a Lyon")).toBe("simulation_tf");
     expect(classifyQuery("estimer ma taxe fonciere")).toBe("simulation_tf");
-    expect(classifyQuery("simuler TF 80m\u00b2 maison Bordeaux")).toBe("simulation_tf");
+    expect(classifyQuery("simuler TF 80m² maison Bordeaux")).toBe("simulation_tf");
   });
 
   it("route les requetes doctrine BOFiP", () => {
@@ -116,7 +116,7 @@ describe("extractTypeLocal", () => {
 // T15 -- Tests extractPrix
 describe("extractPrix", () => {
   it("extrait un prix avec symbole euro", () => {
-    expect(extractPrix("frais de notaire pour 250000\u20ac")).toBe(250000);
+    expect(extractPrix("frais de notaire pour 250000€")).toBe(250000);
   });
 
   it("extrait un prix avec 'euros'", () => {
@@ -124,7 +124,7 @@ describe("extractPrix", () => {
   });
 
   it("extrait un prix avec espaces (format FR)", () => {
-    expect(extractPrix("250 000\u20ac de frais")).toBe(250000);
+    expect(extractPrix("250 000€ de frais")).toBe(250000);
   });
 
   it("extrait un prix en k", () => {
