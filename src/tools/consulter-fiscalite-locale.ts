@@ -1,5 +1,6 @@
 import type { ToolResult } from "../types.js";
 import { resolveCodePostal } from "../utils/geo-api.js";
+import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 const API_BASE = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets";
 
@@ -79,7 +80,7 @@ export async function consulterFiscaliteLocale(
     });
 
     const url = `${API_BASE}/${dataset}/records?${params}`;
-    const response = await fetch(url);
+    const response = await cachedFetch(url, { ttl: CACHE_TTL.REI });
 
     if (!response.ok) {
       const body = await response.text();
@@ -177,7 +178,7 @@ async function comparerCommunes(
 
   try {
     const url = `${API_BASE}/${dataset}/records?${params}`;
-    const response = await fetch(url);
+    const response = await cachedFetch(url, { ttl: CACHE_TTL.REI });
 
     if (!response.ok) {
       const body = await response.text();
@@ -329,7 +330,7 @@ async function queryMultipleCommunes(
   });
 
   const url = `${API_BASE}/${dataset}/records?${params}`;
-  const response = await fetch(url);
+  const response = await cachedFetch(url, { ttl: CACHE_TTL.REI });
 
   if (!response.ok) {
     const body = await response.text();

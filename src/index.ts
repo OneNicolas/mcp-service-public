@@ -13,7 +13,7 @@ import { consulterZonageImmobilier } from "./tools/consulter-zonage-immobilier.j
 import { comparerCommunes } from "./tools/comparer-communes.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.8.1";
+const VERSION = "0.8.2";
 
 // --- Tool definitions for tools/list ---
 
@@ -316,33 +316,50 @@ export default {
       });
     }
 
-    // T14 — Health check enrichi
+    // T14 — Health check enrichi (BUG fix: D1 queries wrapped in try/catch)
     if (url.pathname === "/health") {
-      const lastSync = await env.DB.prepare(
-        `SELECT completed_at, fiches_count, status FROM sync_log WHERE status = 'completed' ORDER BY id DESC LIMIT 1`,
-      ).first<{ completed_at: string; fiches_count: number; status: string }>();
+      let dbStatus: "ok" | "error" = "ok";
+      let dbError: string | null = null;
+      let ficheCount = 0;
+      let lastSync: { completed_at: string; fiches_count: number } | null = null;
+      let lastError: { at: string; status: string; message: string | null } | null = null;
 
-      const ficheCount = await env.DB.prepare(
-        `SELECT COUNT(*) as total FROM fiches`,
-      ).first<{ total: number }>();
+      try {
+        const syncRow = await env.DB.prepare(
+          `SELECT completed_at, fiches_count, status FROM sync_log WHERE status = 'completed' ORDER BY id DESC LIMIT 1`,
+        ).first<{ completed_at: string; fiches_count: number; status: string }>();
 
-      const lastError = await env.DB.prepare(
-        `SELECT started_at, status, error_message FROM sync_log WHERE status != 'completed' ORDER BY id DESC LIMIT 1`,
-      ).first<{ started_at: string; status: string; error_message: string | null }>();
+        const countRow = await env.DB.prepare(
+          `SELECT COUNT(*) as total FROM fiches`,
+        ).first<{ total: number }>();
+
+        const errorRow = await env.DB.prepare(
+          `SELECT started_at, status, error_message FROM sync_log WHERE status != 'completed' ORDER BY id DESC LIMIT 1`,
+        ).first<{ started_at: string; status: string; error_message: string | null }>();
+
+        ficheCount = countRow?.total ?? 0;
+        lastSync = syncRow
+          ? { completed_at: syncRow.completed_at, fiches_count: syncRow.fiches_count }
+          : null;
+        lastError = errorRow
+          ? { at: errorRow.started_at, status: errorRow.status, message: errorRow.error_message }
+          : null;
+      } catch (e) {
+        dbStatus = "error";
+        dbError = e instanceof Error ? e.message : "D1 unavailable";
+      }
 
       return Response.json({
-        status: "ok",
+        status: dbStatus === "ok" ? "ok" : "degraded",
         service: "mcp-service-public",
         version: VERSION,
         tools_count: TOOLS.length,
         tools: TOOLS.map((t) => t.name),
-        fiches_count: ficheCount?.total ?? 0,
-        last_sync: lastSync
-          ? { completed_at: lastSync.completed_at, fiches_count: lastSync.fiches_count }
-          : null,
-        last_error: lastError
-          ? { at: lastError.started_at, status: lastError.status, message: lastError.error_message }
-          : null,
+        db_status: dbStatus,
+        db_error: dbError,
+        fiches_count: ficheCount,
+        last_sync: lastSync,
+        last_error: lastError,
       });
     }
 

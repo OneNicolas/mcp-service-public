@@ -1,5 +1,6 @@
 import type { ToolResult } from "../types.js";
 import { resolveNomCommune, resolveCodePostal } from "../utils/geo-api.js";
+import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 const REI_API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets";
 const DVF_RESOURCE_ID = "d7933994-2c66-4131-a4da-cf7cd18040a4";
@@ -139,7 +140,7 @@ async function fetchServicesCount(codeInsee: string): Promise<number | null> {
       where: `code_insee_commune = '${sanitize(codeInsee)}'`,
     });
 
-    const response = await fetch(`${ANNUAIRE_API}?${params}`);
+    const response = await cachedFetch(`${ANNUAIRE_API}?${params}`, { ttl: CACHE_TTL.ANNUAIRE });
     if (!response.ok) return null;
 
     const data = (await response.json()) as { total_count?: number };
@@ -160,7 +161,7 @@ async function fetchREI(codeInsee: string): Promise<{
   });
 
   try {
-    const response = await fetch(`${REI_API}/fiscalite-locale-des-particuliers/records?${params}`);
+    const response = await cachedFetch(`${REI_API}/fiscalite-locale-des-particuliers/records?${params}`, { ttl: CACHE_TTL.REI });
     if (!response.ok) return null;
     const data = (await response.json()) as { results: Record<string, unknown>[] };
     if (!data.results?.length) return null;
@@ -191,7 +192,7 @@ async function fetchDvfMedianPrixM2(codeInsee: string, typeLocal: string): Promi
         type_local__exact: typeLocal,
         date_mutation__greater: dateMin,
       });
-      const response = await fetch(`${TABULAR_API_DVF}?${params}`);
+      const response = await cachedFetch(`${TABULAR_API_DVF}?${params}`, { ttl: CACHE_TTL.DVF });
       if (!response.ok) continue;
       const data = (await response.json()) as { data: DvfRecord[] };
       if (!data.data?.length) continue;
@@ -237,7 +238,7 @@ async function fetchZonage(codeInsee: string): Promise<string | null> {
 
   for (const filter of columnVariants) {
     try {
-      const response = await fetch(`${TABULAR_API_ZONAGE}?${filter}&page_size=1`);
+      const response = await cachedFetch(`${TABULAR_API_ZONAGE}?${filter}&page_size=1`, { ttl: CACHE_TTL.ZONAGE });
       if (!response.ok) continue;
       const data = (await response.json()) as { data?: Record<string, unknown>[] };
       if (!data.data?.length) continue;

@@ -1,5 +1,6 @@
 import type { ToolResult } from "../types.js";
 import { resolveCodePostal, resolveNomCommune } from "../utils/geo-api.js";
+import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 const ZONAGE_RESOURCE_ID = "13f7282b-8a25-43ab-9713-8bb4e476df55";
 const TABULAR_API = `https://tabular-api.data.gouv.fr/api/resources/${ZONAGE_RESOURCE_ID}/data/`;
@@ -80,7 +81,7 @@ async function fetchZonage(codeInsee: string): Promise<string | null> {
   for (const variant of columnVariants) {
     try {
       const url = `${TABULAR_API}?${variant.filter}&page_size=1`;
-      const response = await fetch(url);
+      const response = await cachedFetch(url, { ttl: CACHE_TTL.ZONAGE });
       if (!response.ok) continue;
 
       const data = (await response.json()) as { data?: Record<string, unknown>[] };

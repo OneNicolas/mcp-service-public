@@ -1,5 +1,7 @@
 /** Résolution code postal / nom de commune → communes via geo.api.gouv.fr */
 
+import { cachedFetch, CACHE_TTL } from "./cache.js";
+
 const GEO_API_BASE = "https://geo.api.gouv.fr";
 
 export interface CommuneGeo {
@@ -17,7 +19,7 @@ export async function resolveCodePostal(codePostal: string): Promise<CommuneGeo[
   }
 
   const url = `${GEO_API_BASE}/communes?codePostal=${cp}&fields=nom,code,codesPostaux,population&format=json`;
-  const response = await fetch(url);
+  const response = await cachedFetch(url, { ttl: CACHE_TTL.GEO_API });
 
   if (!response.ok) {
     throw new Error(`Erreur API geo.api.gouv.fr : ${response.status}`);
@@ -39,7 +41,7 @@ export async function resolveNomCommune(nom: string): Promise<{ nom: string; cod
   if (!cleaned) return null;
 
   const url = `${GEO_API_BASE}/communes?nom=${encodeURIComponent(cleaned)}&fields=nom,code&boost=population&limit=1`;
-  const response = await fetch(url);
+  const response = await cachedFetch(url, { ttl: CACHE_TTL.GEO_API });
 
   if (!response.ok) return null;
 
