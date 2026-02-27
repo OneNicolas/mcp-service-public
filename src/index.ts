@@ -12,8 +12,13 @@ import { simulerFraisNotaire } from "./tools/simuler-frais-notaire.js";
 import { consulterZonageImmobilier } from "./tools/consulter-zonage-immobilier.js";
 import { comparerCommunes } from "./tools/comparer-communes.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
+import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
+import { renderDashboard } from "./admin/dashboard.js";
 
-const VERSION = "0.8.2";
+const VERSION = "0.9.1";
+
+// Table stats initialisee au premier appel outil
+let statsTableReady = false;
 
 // --- Tool definitions for tools/list ---
 
@@ -258,7 +263,7 @@ function jsonRpcError(id: number | string | undefined, code: number, message: st
   });
 }
 
-async function handleMcpPost(request: Request, env: Env): Promise<Response> {
+async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const body = (await request.json()) as JsonRpcRequest;
 
   switch (body.method) {
@@ -283,10 +288,37 @@ async function handleMcpPost(request: Request, env: Env): Promise<Response> {
       if (!params?.name) {
         return jsonRpcError(body.id, -32602, "Missing tool name");
       }
+
+      // Init table stats au premier appel
+      if (!statsTableReady) {
+        try { await ensureStatsTable(env.DB); statsTableReady = true; } catch { /* ignore */ }
+      }
+
+      const startMs = Date.now();
+      let isError = false;
       try {
         const result = await executeTool(params.name, params.arguments || {}, env);
+        isError = result.isError === true;
+        const durationMs = Date.now() - startMs;
+
+        // Log async sans bloquer la reponse
+        ctx.waitUntil(logToolCall(env.DB, {
+          tool_name: params.name,
+          duration_ms: durationMs,
+          is_error: isError,
+          args_summary: summarizeArgs(params.arguments || {}),
+        }));
+
         return jsonRpcResponse(body.id, result);
       } catch (error) {
+        const durationMs = Date.now() - startMs;
+        ctx.waitUntil(logToolCall(env.DB, {
+          tool_name: params.name,
+          duration_ms: durationMs,
+          is_error: true,
+          args_summary: summarizeArgs(params.arguments || {}),
+        }));
+
         return jsonRpcResponse(body.id, {
           content: [{ type: "text", text: `Erreur: ${error instanceof Error ? error.message : "inconnue"}` }],
           isError: true,
@@ -378,7 +410,7 @@ export default {
 
     // MCP Streamable HTTP endpoint
     if (url.pathname === "/mcp" && request.method === "POST") {
-      const resp = await handleMcpPost(request, env);
+      const resp = await handleMcpPost(request, env, _ctx);
       resp.headers.set("Access-Control-Allow-Origin", "*");
       return resp;
     }
@@ -432,6 +464,61 @@ export default {
       });
     }
 
+    // T20 — Dashboard HTML + API JSON
+    if ((url.pathname === "/admin/dashboard" || url.pathname === "/admin/dashboard/api") && request.method === "GET") {
+      const token = url.searchParams.get("token") || request.headers.get("Authorization")?.replace("Bearer ", "");
+      if (!env.ADMIN_SECRET || token !== env.ADMIN_SECRET) {
+        if (url.pathname.endsWith("/api")) {
+          return Response.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        return new Response("Unauthorized", { status: 401, headers: { "Content-Type": "text/plain" } });
+      }
+
+      try {
+        if (!statsTableReady) {
+          await ensureStatsTable(env.DB);
+          statsTableReady = true;
+        }
+        const hours = Number(url.searchParams.get("hours")) || 24;
+        const stats = await getDashboardData(env.DB, Math.min(hours, 720));
+
+        // JSON API
+        if (url.pathname.endsWith("/api")) {
+          return Response.json({ version: VERSION, ...stats });
+        }
+
+        // HTML dashboard — gather additional context
+        const countRow = await env.DB.prepare(
+          "SELECT COUNT(*) as total FROM fiches",
+        ).first<{ total: number }>();
+
+        const lastSyncRow = await env.DB.prepare(
+          "SELECT completed_at, fiches_count FROM sync_log WHERE status = 'completed' ORDER BY id DESC LIMIT 1",
+        ).first<{ completed_at: string; fiches_count: number }>();
+
+        const syncLogs = await env.DB.prepare(
+          "SELECT id, started_at, completed_at, status, fiches_count FROM sync_log ORDER BY id DESC LIMIT 10",
+        ).all();
+
+        const html = renderDashboard({
+          version: VERSION,
+          ficheCount: countRow?.total ?? 0,
+          lastSync: lastSyncRow ?? null,
+          stats,
+          syncLogs: (syncLogs.results ?? []) as any[],
+        });
+
+        return new Response(html, {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      } catch (e) {
+        return Response.json(
+          { error: e instanceof Error ? e.message : "unknown" },
+          { status: 500 },
+        );
+      }
+    }
+
     return Response.json({ error: "Not found" }, { status: 404 });
   },
 
@@ -445,5 +532,11 @@ export default {
     } catch (error) {
       console.error("Cron sync failed:", error);
     }
+
+    // Purge des stats de plus de 30 jours
+    try {
+      const purged = await purgeOldStats(env.DB, 30);
+      if (purged > 0) console.log(`Cron: purged ${purged} old stats entries`);
+    } catch { /* non-bloquant */ }
   },
 };

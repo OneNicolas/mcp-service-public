@@ -1,5 +1,6 @@
 import type { ToolResult } from "../types.js";
 import { resolveCodePostal, resolveNomCommune } from "../utils/geo-api.js";
+import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 // --- Constantes de calcul ---
 
@@ -53,6 +54,7 @@ interface SimulerTaxeFonciereArgs {
   type_bien: "Maison" | "Appartement";
   nombre_pieces?: number;
   annee_construction?: number;
+  residence_principale?: boolean;
 }
 
 // --- Fonction principale ---
@@ -68,6 +70,7 @@ export async function simulerTaxeFonciere(
     type_bien,
     nombre_pieces,
     annee_construction,
+    residence_principale = false,
   } = args;
 
   if (!commune && !code_insee && !code_postal) {
@@ -135,8 +138,7 @@ export async function simulerTaxeFonciere(
     const tarifAjuste = tarifBase * ratioDVF;
     const vlcEstimee = surfacePonderee * tarifAjuste * coefEntretien;
     const baseImposable = vlcEstimee * 0.5;
-    const tauxTFBNum = Number(tauxTFB.taux);
-    const tfEstimee = baseImposable * (tauxTFBNum / 100);
+    const tfEstimee = baseImposable * (tauxTFB.tauxGlobal / 100);
 
     const report = buildSimulationReport({
       communeNom: resolved.nom,
@@ -156,10 +158,17 @@ export async function simulerTaxeFonciere(
       tarifAjuste,
       vlcEstimee,
       baseImposable,
-      tauxTFB: tauxTFBNum,
-      tauxTEOM: tauxTFB.tauxTEOM ? Number(tauxTFB.tauxTEOM) : null,
+      tauxTFB: tauxTFB.tauxGlobal,
+      tauxCommune: tauxTFB.tauxCommune,
+      tauxInterco: tauxTFB.tauxInterco,
+      tauxSyndicat: tauxTFB.tauxSyndicat,
+      tauxGemapi: tauxTFB.tauxGemapi,
+      tauxTasa: tauxTFB.tauxTasa,
+      tauxTse: tauxTFB.tauxTse,
+      tauxTEOM: tauxTFB.tauxTEOM,
       tfEstimee,
       intercommunalite: tauxTFB.intercommunalite,
+      residencePrincipale: residence_principale,
     });
 
     return { content: [{ type: "text", text: report }] };
@@ -191,22 +200,28 @@ async function resolveCommune(
 // --- Fetch taux REI ---
 
 interface TauxREI {
-  taux: string;
+  tauxGlobal: number;
+  tauxCommune: number;
+  tauxInterco: number;
+  tauxSyndicat: number;
+  tauxGemapi: number;
+  tauxTasa: number;
+  tauxTse: number;
   exercice: string;
   intercommunalite: string;
-  tauxTEOM?: string;
+  tauxTEOM: number | null;
 }
 
 async function fetchTauxREI(codeInsee: string): Promise<TauxREI | null> {
   const params = new URLSearchParams({
     limit: "1",
-    select: "exercice,libcom,q03,taux_global_tfb,taux_plein_teom",
+    select: "exercice,libcom,q03,taux_global_tfb,taux_plein_teom,e12vote,e22,e32vote,e52,e52a,e52tasa,e52ggemapi",
     where: `insee_com="${sanitize(codeInsee)}"`,
     order_by: "exercice DESC",
   });
 
   const url = `${REI_API}/fiscalite-locale-des-particuliers/records?${params}`;
-  const response = await fetch(url);
+  const response = await cachedFetch(url, { ttl: CACHE_TTL.REI });
   if (!response.ok) return null;
 
   const data = (await response.json()) as { results: Record<string, unknown>[] };
@@ -214,10 +229,16 @@ async function fetchTauxREI(codeInsee: string): Promise<TauxREI | null> {
 
   const r = data.results[0];
   return {
-    taux: String(r.taux_global_tfb ?? "0"),
+    tauxGlobal: Number(r.taux_global_tfb ?? 0),
+    tauxCommune: Number(r.e12vote ?? 0),
+    tauxInterco: Number(r.e32vote ?? 0),
+    tauxSyndicat: Number(r.e22 ?? 0),
+    tauxGemapi: Number(r.e52ggemapi ?? 0),
+    tauxTasa: Number(r.e52tasa ?? 0),
+    tauxTse: Number(r.e52 ?? 0) + Number(r.e52a ?? 0),
     exercice: String(r.exercice ?? ""),
     intercommunalite: String(r.q03 ?? "N/A"),
-    tauxTEOM: r.taux_plein_teom ? String(r.taux_plein_teom) : undefined,
+    tauxTEOM: r.taux_plein_teom ? Number(r.taux_plein_teom) : null,
   };
 }
 
@@ -245,7 +266,7 @@ async function fetchDvfPrixM2(codeInsee: string, typeBien: string): Promise<DvfP
     });
 
     try {
-      const response = await fetch(`${TABULAR_API}?${params}`);
+      const response = await cachedFetch(`${TABULAR_API}?${params}`, { ttl: CACHE_TTL.DVF });
       if (!response.ok) continue;
 
       const data = (await response.json()) as { data: DvfRecord[] };
@@ -319,9 +340,16 @@ interface SimulationData {
   vlcEstimee: number;
   baseImposable: number;
   tauxTFB: number;
+  tauxCommune: number;
+  tauxInterco: number;
+  tauxSyndicat: number;
+  tauxGemapi: number;
+  tauxTasa: number;
+  tauxTse: number;
   tauxTEOM: number | null;
   tfEstimee: number;
   intercommunalite: string;
+  residencePrincipale: boolean;
 }
 
 function buildSimulationReport(d: SimulationData): string {
