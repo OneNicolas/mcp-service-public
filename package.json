@@ -1,14 +1,16 @@
 {
   "name": "mcp-service-public",
-  "version": "0.3.0",
-  "description": "MCP Server for French service-public.fr — Fiches pratiques, Annuaire, Fiscalité locale, Doctrine fiscale",
+  "version": "0.8.0",
+  "description": "MCP Server for French service-public.fr — Fiches pratiques, Annuaire, Fiscalité locale, Doctrine fiscale, DVF, Simulateurs, Zonage ABC",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:init": "wrangler d1 execute service-public-db --local --file=./schema.sql",
     "db:init:remote": "wrangler d1 execute service-public-db --remote --file=./schema.sql",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.0",
@@ -17,6 +19,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250214.0",
     "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
     "wrangler": "^4.67.0"
   }
 }

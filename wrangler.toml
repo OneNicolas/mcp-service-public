@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2025-02-20"
 compatibility_flags = ["nodejs_compat"]
 
+# Build command for Cloudflare Workers Builds (auto-deploy from GitHub)
+[build]
+command = "npm install"
+
 # Migration to remove the old Durable Object
 [[migrations]]
 tag = "v1"

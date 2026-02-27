@@ -8,9 +8,12 @@ import { rechercherDoctrineFiscale } from "./tools/rechercher-doctrine-fiscale.j
 import { rechercher } from "./tools/rechercher.js";
 import { consulterTransactionsImmobilieres } from "./tools/consulter-transactions-immobilieres.js";
 import { simulerTaxeFonciere } from "./tools/simuler-taxe-fonciere.js";
+import { simulerFraisNotaire } from "./tools/simuler-frais-notaire.js";
+import { consulterZonageImmobilier } from "./tools/consulter-zonage-immobilier.js";
+import { comparerCommunes } from "./tools/comparer-communes.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 
 // --- Tool definitions for tools/list ---
 
@@ -18,7 +21,7 @@ const TOOLS = [
   {
     name: "rechercher",
     description:
-      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), ou transactions immobilières DVF. À utiliser en premier si la source appropriée n'est pas évidente.",
+      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), transactions immobilières DVF, ou simulation de taxe foncière. À utiliser en premier si la source appropriée n'est pas évidente.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -150,6 +153,51 @@ const TOOLS = [
       required: ["surface", "type_bien"],
     },
   },
+  {
+    name: "simuler_frais_notaire",
+    description:
+      "Estime les frais de notaire (frais d'acquisition) pour un achat immobilier. Calcule les droits de mutation (DMTO), émoluments du notaire (barème dégressif réglementé), contribution de sécurité immobilière et débours. Distingue ancien (7-8 %) et neuf (2-3 %). Affiche les deux hypothèses DMTO (taux normal et majoré depuis avril 2025).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        prix: { type: "number", description: "Prix d'achat du bien en euros (ex: 250000)" },
+        type: { type: "string", enum: ["ancien", "neuf"], description: "Type de bien : ancien ou neuf" },
+        departement: { type: "string", description: "Département (optionnel, pour information)" },
+      },
+      required: ["prix", "type"],
+    },
+  },
+  {
+    name: "consulter_zonage_immobilier",
+    description:
+      "Consulte la zone ABC d'une commune (A bis, A, B1, B2, C) utilisée pour les dispositifs immobiliers (Pinel, PTZ, plafonds loyers). Accepte un nom de commune, un code INSEE ou un code postal. Retourne la zone, les plafonds de loyer, les plafonds de ressources et l'éligibilité aux dispositifs. Source : Ministère de la Transition écologique via data.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bordeaux')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune (ex: '69123')" },
+        code_postal: { type: "string", description: "Code postal (ex: '33000'). Résout automatiquement vers le code INSEE." },
+      },
+    },
+  },
+  {
+    name: "comparer_communes",
+    description:
+      "Compare 2 à 5 communes sur un tableau croisé : fiscalité locale (taux TFB, TEOM), prix immobiliers (DVF médian/m² appart et maison), zonage ABC et intercommunalité. Aide à la décision pour un déménagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        communes: {
+          type: "array",
+          items: { type: "string" },
+          description: "Liste de 2 à 5 communes à comparer (noms, codes postaux ou codes INSEE). Ex: ['Lyon', 'Bordeaux', 'Nantes']",
+          minItems: 2,
+          maxItems: 5,
+        },
+      },
+      required: ["communes"],
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -178,6 +226,12 @@ async function executeTool(
       return consulterTransactionsImmobilieres(args as { commune?: string; code_insee?: string; code_postal?: string; type_local?: string; annee?: number });
     case "simuler_taxe_fonciere":
       return simulerTaxeFonciere(args as { commune?: string; code_insee?: string; code_postal?: string; surface: number; type_bien: "Maison" | "Appartement"; nombre_pieces?: number; annee_construction?: number });
+    case "simuler_frais_notaire":
+      return simulerFraisNotaire(args as { prix: number; type: "ancien" | "neuf"; departement?: string });
+    case "consulter_zonage_immobilier":
+      return consulterZonageImmobilier(args as { commune?: string; code_insee?: string; code_postal?: string });
+    case "comparer_communes":
+      return comparerCommunes(args as { communes: string[] });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -262,7 +316,7 @@ export default {
       });
     }
 
-    // Health check with last sync info
+    // T14 — Health check enrichi
     if (url.pathname === "/health") {
       const lastSync = await env.DB.prepare(
         `SELECT completed_at, fiches_count, status FROM sync_log WHERE status = 'completed' ORDER BY id DESC LIMIT 1`,
@@ -272,13 +326,22 @@ export default {
         `SELECT COUNT(*) as total FROM fiches`,
       ).first<{ total: number }>();
 
+      const lastError = await env.DB.prepare(
+        `SELECT started_at, status, error_message FROM sync_log WHERE status != 'completed' ORDER BY id DESC LIMIT 1`,
+      ).first<{ started_at: string; status: string; error_message: string | null }>();
+
       return Response.json({
         status: "ok",
         service: "mcp-service-public",
         version: VERSION,
+        tools_count: TOOLS.length,
+        tools: TOOLS.map((t) => t.name),
         fiches_count: ficheCount?.total ?? 0,
         last_sync: lastSync
           ? { completed_at: lastSync.completed_at, fiches_count: lastSync.fiches_count }
+          : null,
+        last_error: lastError
+          ? { at: lastError.started_at, status: lastError.status, message: lastError.error_message }
           : null,
       });
     }

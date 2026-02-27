@@ -3,31 +3,29 @@ import { resolveCodePostal, resolveNomCommune } from "../utils/geo-api.js";
 
 // --- Constantes de calcul ---
 
-// Tarifs VLC moyens nationaux (€/m²/an) — catégorie 5-6 (ordinaire/assez confortable)
-// Sources : exemples DGFiP, simulateurs existants, données Cerema
+// Tarifs VLC moyens nationaux (\u20ac/m\u00b2/an) \u2014 cat\u00e9gorie 5-6 (ordinaire/assez confortable)
 const TARIF_BASE: Record<string, number> = {
   Appartement: 28,
   Maison: 22,
 };
 
-// Prix médians nationaux au m² (DVF 2023-2024) pour calcul du ratio d'ajustement
+// Prix m\u00e9dians nationaux au m\u00b2 (DVF 2023-2024) pour calcul du ratio d'ajustement
 const PRIX_M2_NATIONAL: Record<string, number> = {
   Appartement: 3800,
   Maison: 2200,
 };
 
-// Coefficient d'entretien selon l'ancienneté (art. 324 Q annexe III CGI)
-function getCoefEntretien(anneeConstruction?: number): { coef: number; label: string } {
-  if (!anneeConstruction) return { coef: 1.0, label: "standard (non précisé)" };
-  if (anneeConstruction >= 2010) return { coef: 1.15, label: "bon état (construction récente)" };
-  if (anneeConstruction >= 1990) return { coef: 1.05, label: "assez bon état" };
-  if (anneeConstruction >= 1970) return { coef: 1.00, label: "état normal" };
-  return { coef: 0.90, label: "vétuste (avant 1970)" };
+// Coefficient d'entretien selon l'anciennet\u00e9 (art. 324 Q annexe III CGI)
+export function getCoefEntretien(anneeConstruction?: number): { coef: number; label: string } {
+  if (!anneeConstruction) return { coef: 1.0, label: "standard (non pr\u00e9cis\u00e9)" };
+  if (anneeConstruction >= 2010) return { coef: 1.15, label: "bon \u00e9tat (construction r\u00e9cente)" };
+  if (anneeConstruction >= 1990) return { coef: 1.05, label: "assez bon \u00e9tat" };
+  if (anneeConstruction >= 1970) return { coef: 1.00, label: "\u00e9tat normal" };
+  return { coef: 0.90, label: "v\u00e9tuste (avant 1970)" };
 }
 
-// Équivalences superficielles standard pour éléments de confort (art. 324 L annexe III CGI)
-// Chauffage : +2m²/pièce, sanitaires courants : forfait ~12m²
-function getSurfacePonderee(surface: number, nbPieces: number): number {
+// \u00c9quivalences superficielles standard pour \u00e9l\u00e9ments de confort (art. 324 L annexe III CGI)
+export function getSurfacePonderee(surface: number, nbPieces: number): number {
   const equivalencesConfort = nbPieces * 2 + 12;
   return surface + equivalencesConfort;
 }
@@ -38,7 +36,7 @@ const REI_API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets
 const DVF_RESOURCE_ID = "d7933994-2c66-4131-a4da-cf7cd18040a4";
 const TABULAR_API = `https://tabular-api.data.gouv.fr/api/resources/${DVF_RESOURCE_ID}/data/`;
 
-// PLM : code INSEE unique → arrondissements DVF
+// PLM : code INSEE unique -> arrondissements DVF
 const PLM_ARRONDISSEMENTS: Record<string, string[]> = {
   "75056": Array.from({ length: 20 }, (_, i) => `751${String(i + 1).padStart(2, "0")}`),
   "69123": Array.from({ length: 9 }, (_, i) => `6938${i + 1}`),
@@ -72,7 +70,6 @@ export async function simulerTaxeFonciere(
     annee_construction,
   } = args;
 
-  // Validation des entrées
   if (!commune && !code_insee && !code_postal) {
     return {
       content: [{ type: "text", text: "Veuillez fournir un nom de commune, un code INSEE ou un code postal." }],
@@ -82,29 +79,27 @@ export async function simulerTaxeFonciere(
 
   if (!surface || surface <= 0) {
     return {
-      content: [{ type: "text", text: "La surface habitable doit être supérieure à 0 m²." }],
+      content: [{ type: "text", text: "La surface habitable doit \u00eatre sup\u00e9rieure \u00e0 0 m\u00b2." }],
       isError: true,
     };
   }
 
   if (!type_bien || !TARIF_BASE[type_bien]) {
     return {
-      content: [{ type: "text", text: "Le type de bien doit être \"Maison\" ou \"Appartement\"." }],
+      content: [{ type: "text", text: "Le type de bien doit \u00eatre \"Maison\" ou \"Appartement\"." }],
       isError: true,
     };
   }
 
   try {
-    // Résolution de la commune
     const resolved = await resolveCommune(commune, code_insee, code_postal);
     if (!resolved) {
       return {
-        content: [{ type: "text", text: "Impossible de résoudre la commune. Vérifiez le nom, code INSEE ou code postal." }],
+        content: [{ type: "text", text: "Impossible de r\u00e9soudre la commune. V\u00e9rifiez le nom, code INSEE ou code postal." }],
         isError: true,
       };
     }
 
-    // Lancer les requêtes REI et DVF en parallèle
     const [reiResult, dvfResult] = await Promise.allSettled([
       fetchTauxREI(resolved.code),
       fetchDvfPrixM2(resolved.code, type_bien),
@@ -117,26 +112,24 @@ export async function simulerTaxeFonciere(
       return {
         content: [{
           type: "text",
-          text: `Impossible de récupérer le taux de taxe foncière pour ${resolved.nom} (${resolved.code}). Les données REI ne sont peut-être pas disponibles pour cette commune.`,
+          text: `Impossible de r\u00e9cup\u00e9rer le taux de taxe fonci\u00e8re pour ${resolved.nom} (${resolved.code}). Les donn\u00e9es REI ne sont peut-\u00eatre pas disponibles pour cette commune.`,
         }],
         isError: true,
       };
     }
 
-    // Calculs
     const piecesEstimees = !nombre_pieces;
     const nbPieces = nombre_pieces ?? estimerPieces(surface, type_bien);
     const surfacePonderee = getSurfacePonderee(surface, nbPieces);
     const { coef: coefEntretien, label: labelEntretien } = getCoefEntretien(annee_construction);
     const tarifBase = TARIF_BASE[type_bien];
 
-    // Ajustement DVF : ratio prix local vs national, cappé [0.5, 2.5]
     let ratioDVF = 1.0;
-    let dvfLabel = "non disponible (tarif national moyen appliqué)";
+    let dvfLabel = "non disponible (tarif national moyen appliqu\u00e9)";
     if (dvfData && dvfData.prixM2Median > 0 && dvfData.nbTransactions >= 5) {
       const prixNational = PRIX_M2_NATIONAL[type_bien];
       ratioDVF = Math.max(0.5, Math.min(2.5, dvfData.prixM2Median / prixNational));
-      dvfLabel = `${formatEuro(dvfData.prixM2Median)}/m² local vs ${formatEuro(prixNational)}/m² national → ratio ×${ratioDVF.toFixed(2)} (${dvfData.nbTransactions} transactions)`;
+      dvfLabel = `${formatEuro(dvfData.prixM2Median)}/m\u00b2 local vs ${formatEuro(prixNational)}/m\u00b2 national \u2192 ratio \u00d7${ratioDVF.toFixed(2)} (${dvfData.nbTransactions} transactions)`;
     }
 
     const tarifAjuste = tarifBase * ratioDVF;
@@ -145,7 +138,6 @@ export async function simulerTaxeFonciere(
     const tauxTFBNum = Number(tauxTFB.taux);
     const tfEstimee = baseImposable * (tauxTFBNum / 100);
 
-    // Construction du rapport
     const report = buildSimulationReport({
       communeNom: resolved.nom,
       communeCode: resolved.code,
@@ -179,29 +171,20 @@ export async function simulerTaxeFonciere(
   }
 }
 
-// --- Résolution commune ---
+// --- R\u00e9solution commune ---
 
 async function resolveCommune(
   commune?: string,
   codeInsee?: string,
   codePostal?: string,
 ): Promise<{ nom: string; code: string } | null> {
-  if (codeInsee) {
-    return { nom: codeInsee, code: codeInsee.trim() };
-  }
-
+  if (codeInsee) return { nom: codeInsee, code: codeInsee.trim() };
   if (codePostal) {
     const communes = await resolveCodePostal(codePostal);
-    if (communes.length > 0) {
-      return { nom: communes[0].nom, code: communes[0].code };
-    }
+    if (communes.length > 0) return { nom: communes[0].nom, code: communes[0].code };
     return null;
   }
-
-  if (commune) {
-    return resolveNomCommune(commune);
-  }
-
+  if (commune) return resolveNomCommune(commune);
   return null;
 }
 
@@ -224,7 +207,6 @@ async function fetchTauxREI(codeInsee: string): Promise<TauxREI | null> {
 
   const url = `${REI_API}/fiscalite-locale-des-particuliers/records?${params}`;
   const response = await fetch(url);
-
   if (!response.ok) return null;
 
   const data = (await response.json()) as { results: Record<string, unknown>[] };
@@ -239,21 +221,16 @@ async function fetchTauxREI(codeInsee: string): Promise<TauxREI | null> {
   };
 }
 
-// --- Fetch DVF prix au m² (version allégée) ---
+// --- Fetch DVF prix au m\u00b2 ---
 
 interface DvfPrixM2 {
   prixM2Median: number;
   nbTransactions: number;
 }
 
-async function fetchDvfPrixM2(
-  codeInsee: string,
-  typeBien: string,
-): Promise<DvfPrixM2 | null> {
-  // Expander PLM si nécessaire (on prend les 3 premiers arrondissements seulement)
+async function fetchDvfPrixM2(codeInsee: string, typeBien: string): Promise<DvfPrixM2 | null> {
   const arrondissements = PLM_ARRONDISSEMENTS[codeInsee];
   const codesToQuery = arrondissements ? arrondissements.slice(0, 3) : [codeInsee];
-
   const dateMin = `${new Date().getFullYear() - 2}-01-01`;
   const allPrixM2: number[] = [];
 
@@ -274,7 +251,6 @@ async function fetchDvfPrixM2(
       const data = (await response.json()) as { data: DvfRecord[] };
       if (!data.data?.length) continue;
 
-      // Dédupliquer par id_mutation, garder la plus grande surface
       const byMutation = new Map<string, { prix: number; surface: number }>();
       for (const rec of data.data) {
         if (!rec.valeur_fonciere || rec.valeur_fonciere <= 0) continue;
@@ -282,19 +258,13 @@ async function fetchDvfPrixM2(
 
         const existing = byMutation.get(rec.id_mutation);
         if (!existing || rec.surface_reelle_bati > existing.surface) {
-          byMutation.set(rec.id_mutation, {
-            prix: rec.valeur_fonciere,
-            surface: rec.surface_reelle_bati,
-          });
+          byMutation.set(rec.id_mutation, { prix: rec.valeur_fonciere, surface: rec.surface_reelle_bati });
         }
       }
 
       for (const { prix, surface } of byMutation.values()) {
         const pm2 = prix / surface;
-        // Filtre basique : exclure les aberrants
-        if (pm2 >= 200 && pm2 <= 30000) {
-          allPrixM2.push(pm2);
-        }
+        if (pm2 >= 200 && pm2 <= 30000) allPrixM2.push(pm2);
       }
     } catch {
       continue;
@@ -303,7 +273,6 @@ async function fetchDvfPrixM2(
 
   if (allPrixM2.length < 3) return null;
 
-  // Filtrage IQR ×3 puis médiane
   allPrixM2.sort((a, b) => a - b);
   const q1 = allPrixM2[Math.floor(allPrixM2.length * 0.25)];
   const q3 = allPrixM2[Math.floor(allPrixM2.length * 0.75)];
@@ -312,10 +281,7 @@ async function fetchDvfPrixM2(
 
   if (filtered.length < 3) return null;
 
-  return {
-    prixM2Median: median(filtered),
-    nbTransactions: filtered.length,
-  };
+  return { prixM2Median: median(filtered), nbTransactions: filtered.length };
 }
 
 interface DvfRecord {
@@ -325,9 +291,9 @@ interface DvfRecord {
   type_local: string | null;
 }
 
-// --- Estimation du nombre de pièces si non fourni ---
+// --- Estimation du nombre de pi\u00e8ces ---
 
-function estimerPieces(surface: number, typeBien: string): number {
+export function estimerPieces(surface: number, typeBien: string): number {
   const surfaceParPiece = typeBien === "Appartement" ? 20 : 25;
   return Math.max(1, Math.round(surface / surfaceParPiece));
 }
@@ -361,54 +327,46 @@ interface SimulationData {
 function buildSimulationReport(d: SimulationData): string {
   const lines: string[] = [];
 
-  lines.push(`🏠 **Simulation taxe foncière — ${d.communeNom} (${d.communeCode})**`);
+  lines.push(`\ud83c\udfe0 **Simulation taxe fonci\u00e8re \u2014 ${d.communeNom} (${d.communeCode})**`);
   lines.push("");
 
-  // Paramètres du bien
-  lines.push("**Caractéristiques du bien :**");
+  lines.push("**Caract\u00e9ristiques du bien :**");
   lines.push(`  Type : ${d.typeBien}`);
-  lines.push(`  Surface habitable : ${d.surface} m²`);
-  lines.push(`  Nombre de pièces : ${d.nbPieces}${d.piecesEstimees ? " (estimé)" : ""}`);
-  if (d.anneeConstruction) {
-    lines.push(`  Année de construction : ${d.anneeConstruction}`);
-  }
-  lines.push(`  Surface pondérée : ${d.surfacePonderee} m² (surface + équivalences confort)`);
+  lines.push(`  Surface habitable : ${d.surface} m\u00b2`);
+  lines.push(`  Nombre de pi\u00e8ces : ${d.nbPieces}${d.piecesEstimees ? " (estim\u00e9)" : ""}`);
+  if (d.anneeConstruction) lines.push(`  Ann\u00e9e de construction : ${d.anneeConstruction}`);
+  lines.push(`  Surface pond\u00e9r\u00e9e : ${d.surfacePonderee} m\u00b2 (surface + \u00e9quivalences confort)`);
   lines.push("");
 
-  // Détail du calcul
-  lines.push("**Détail du calcul :**");
-  lines.push(`  1. Tarif VLC de base (${d.typeBien}) : ${d.tarifBase} €/m²/an`);
-  lines.push(`  2. Ajustement marché local (DVF) : ${d.dvfLabel}`);
-  lines.push(`  3. Tarif ajusté : ${d.tarifAjuste.toFixed(1)} €/m²/an`);
-  lines.push(`  4. Coefficient d'entretien : ×${d.coefEntretien.toFixed(2)} (${d.labelEntretien})`);
-  lines.push(`  5. VLC estimée : ${d.surfacePonderee} m² × ${d.tarifAjuste.toFixed(1)} € × ${d.coefEntretien.toFixed(2)} = **${formatEuro(d.vlcEstimee)}**/an`);
-  lines.push(`  6. Base imposable : ${formatEuro(d.vlcEstimee)} × 50% = **${formatEuro(d.baseImposable)}**`);
+  lines.push("**D\u00e9tail du calcul :**");
+  lines.push(`  1. Tarif VLC de base (${d.typeBien}) : ${d.tarifBase} \u20ac/m\u00b2/an`);
+  lines.push(`  2. Ajustement march\u00e9 local (DVF) : ${d.dvfLabel}`);
+  lines.push(`  3. Tarif ajust\u00e9 : ${d.tarifAjuste.toFixed(1)} \u20ac/m\u00b2/an`);
+  lines.push(`  4. Coefficient d'entretien : \u00d7${d.coefEntretien.toFixed(2)} (${d.labelEntretien})`);
+  lines.push(`  5. VLC estim\u00e9e : ${d.surfacePonderee} m\u00b2 \u00d7 ${d.tarifAjuste.toFixed(1)} \u20ac \u00d7 ${d.coefEntretien.toFixed(2)} = **${formatEuro(d.vlcEstimee)}**/an`);
+  lines.push(`  6. Base imposable : ${formatEuro(d.vlcEstimee)} \u00d7 50% = **${formatEuro(d.baseImposable)}**`);
   lines.push(`  7. Taux global TFB (${d.communeNom}, ${d.exercice}) : **${d.tauxTFB} %**`);
   lines.push("");
 
-  // Résultat
-  lines.push(`**➡️ Taxe foncière estimée : ${formatEuro(d.tfEstimee)} / an**`);
+  lines.push(`**\u27a1\ufe0f Taxe fonci\u00e8re estim\u00e9e : ${formatEuro(d.tfEstimee)} / an**`);
   lines.push("");
 
-  // TEOM en bonus si disponible
   if (d.tauxTEOM && d.tauxTEOM > 0) {
     const teom = d.baseImposable * (d.tauxTEOM / 100);
-    lines.push(`  + TEOM estimée (${d.tauxTEOM} %) : ${formatEuro(teom)} / an`);
+    lines.push(`  + TEOM estim\u00e9e (${d.tauxTEOM} %) : ${formatEuro(teom)} / an`);
     lines.push(`  **= Total TF + TEOM : ${formatEuro(d.tfEstimee + teom)} / an**`);
     lines.push("");
   }
 
-  // Contexte commune
   lines.push(`**Commune :** ${d.communeNom} (${d.communeCode})`);
-  lines.push(`  Intercommunalité : ${d.intercommunalite}`);
-  lines.push(`  Exercice fiscal de référence : ${d.exercice}`);
+  lines.push(`  Intercommunalit\u00e9 : ${d.intercommunalite}`);
+  lines.push(`  Exercice fiscal de r\u00e9f\u00e9rence : ${d.exercice}`);
   lines.push("");
 
-  // Avertissements
-  lines.push("⚠️ **Estimation indicative uniquement.**");
-  lines.push("  La valeur locative cadastrale réelle dépend de paramètres internes DGFiP");
-  lines.push("  (tarifs communaux de 1970, classement en catégorie, correctifs) non publiés.");
-  lines.push("  Le taux TFB et la TEOM sont les vrais taux votés par les collectivités.");
+  lines.push("\u26a0\ufe0f **Estimation indicative uniquement.**");
+  lines.push("  La valeur locative cadastrale r\u00e9elle d\u00e9pend de param\u00e8tres internes DGFiP");
+  lines.push("  (tarifs communaux de 1970, classement en cat\u00e9gorie, correctifs) non publi\u00e9s.");
+  lines.push("  Le taux TFB et la TEOM sont les vrais taux vot\u00e9s par les collectivit\u00e9s.");
   lines.push("  Seul l'avis d'imposition fait foi.");
   lines.push("");
   lines.push("_Sources : DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr_");
@@ -424,7 +382,7 @@ function median(sorted: number[]): number {
   return n % 2 === 1 ? sorted[Math.floor(n / 2)] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
 }
 
-function formatEuro(value: number): string {
+export function formatEuro(value: number): string {
   return value.toLocaleString("fr-FR", {
     style: "currency",
     currency: "EUR",
@@ -432,6 +390,6 @@ function formatEuro(value: number): string {
   });
 }
 
-function sanitize(input: string): string {
+export function sanitize(input: string): string {
   return input.replace(/['"\\]/g, "");
 }
