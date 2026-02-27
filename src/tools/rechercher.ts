@@ -260,8 +260,8 @@ export function extractTypeLocal(query: string): string | null {
 
 /** T15 -- Extrait un prix en euros de la requete */
 export function extractPrix(query: string): number | null {
-  // "250000 euros", "250 000 EUR", "250000EUR"
-  const matchEuro = query.match(/(\d[\d\s.,]*\d)\s*(?:€|euros?|eur)\b/i);
+  // "250000 euros", "250 000 EUR", "250000EUR", "250 000€"
+  const matchEuro = query.match(/(\d[\d\s.,]*\d)\s*(?:€|euros?\b|eur\b)/i);
   if (matchEuro) {
     const val = parseNumberFr(matchEuro[1]);
     if (val > 0 && val < 100_000_000) return val;
