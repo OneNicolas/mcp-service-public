@@ -7,9 +7,10 @@ import { consulterFiscaliteLocale } from "./tools/consulter-fiscalite-locale.js"
 import { rechercherDoctrineFiscale } from "./tools/rechercher-doctrine-fiscale.js";
 import { rechercher } from "./tools/rechercher.js";
 import { consulterTransactionsImmobilieres } from "./tools/consulter-transactions-immobilieres.js";
+import { simulerTaxeFonciere } from "./tools/simuler-taxe-fonciere.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 
-const VERSION = "0.6.1";
+const VERSION = "0.7.0";
 
 // --- Tool definitions for tools/list ---
 
@@ -131,6 +132,24 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "simuler_taxe_fonciere",
+    description:
+      "Estime la taxe foncière annuelle d'un bien immobilier. Combine les vrais taux communaux (REI DGFiP) avec une estimation de la valeur locative cadastrale ajustée au marché local via les transactions DVF. Accepte un nom de commune, un code INSEE ou un code postal. Résultat indicatif uniquement.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bordeaux')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune (ex: '69123')" },
+        code_postal: { type: "string", description: "Code postal (ex: '33000'). Résout automatiquement vers le code INSEE." },
+        surface: { type: "number", description: "Surface habitable en m² (ex: 75)" },
+        type_bien: { type: "string", enum: ["Maison", "Appartement"], description: "Type de bien immobilier" },
+        nombre_pieces: { type: "number", description: "Nombre de pièces principales (optionnel, estimé si absent)" },
+        annee_construction: { type: "number", description: "Année de construction (optionnel, influence le coefficient d'entretien)" },
+      },
+      required: ["surface", "type_bien"],
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -157,6 +176,8 @@ async function executeTool(
       return rechercherDoctrineFiscale(args as { query: string; serie?: string; limit?: number });
     case "consulter_transactions_immobilieres":
       return consulterTransactionsImmobilieres(args as { commune?: string; code_insee?: string; code_postal?: string; type_local?: string; annee?: number });
+    case "simuler_taxe_fonciere":
+      return simulerTaxeFonciere(args as { commune?: string; code_insee?: string; code_postal?: string; surface: number; type_bien: "Maison" | "Appartement"; nombre_pieces?: number; annee_construction?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
