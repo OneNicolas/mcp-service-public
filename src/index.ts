@@ -12,11 +12,12 @@ import { simulerFraisNotaire } from "./tools/simuler-frais-notaire.js";
 import { consulterZonageImmobilier } from "./tools/consulter-zonage-immobilier.js";
 import { comparerCommunes } from "./tools/comparer-communes.js";
 import { simulerImpotRevenu } from "./tools/simuler-impot-revenu.js";
+import { rechercherConventionCollective } from "./tools/rechercher-convention-collective.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 
-const VERSION = "0.9.5";
+const VERSION = "0.9.7";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -220,6 +221,19 @@ const TOOLS = [
       required: ["revenu_net_imposable"],
     },
   },
+  {
+    name: "rechercher_convention_collective",
+    description:
+      "Recherche une convention collective nationale par numero IDCC, secteur d'activite ou mot-cle. Source : base KALI (DILA) via data.gouv.fr. Retourne le titre, l'IDCC, l'etat (en vigueur/abrogee), la nature et le lien Legifrance.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Mot-cle ou secteur d'activite (ex: 'boulangerie', 'metallurgie', 'batiment')" },
+        idcc: { type: "string", description: "Numero IDCC (ex: '843', '3248')" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
+      },
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -256,6 +270,8 @@ async function executeTool(
       return comparerCommunes(args as { communes: string[] });
     case "simuler_impot_revenu":
       return simulerImpotRevenu(args as { revenu_net_imposable: number; nb_parts?: number; situation?: "celibataire" | "marie" | "pacse" | "divorce" | "veuf"; nb_enfants?: number });
+    case "rechercher_convention_collective":
+      return rechercherConventionCollective(args as { query?: string; idcc?: string; limit?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
