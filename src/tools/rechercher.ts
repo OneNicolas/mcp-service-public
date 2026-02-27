@@ -40,16 +40,18 @@ export async function rechercher(
   switch (category) {
     case "simulation_tf": {
       const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
       const surface = extractSurface(query);
       const typeBien = extractTypeBien(query);
+      const loc = communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : null;
 
-      if (communeName && surface && typeBien) {
-        const result = await simulerTaxeFonciere({ commune: communeName, surface, type_bien: typeBien });
+      if (loc && surface && typeBien) {
+        const result = await simulerTaxeFonciere({ ...loc, surface, type_bien: typeBien });
         return prefixResult(result, "🧮 Simulation taxe fonciere");
       }
 
-      if (communeName) {
-        const result = await consulterFiscaliteLocale({ commune: communeName });
+      if (loc) {
+        const result = await consulterFiscaliteLocale(loc);
         return prefixResult(result, "📍 Fiscalite locale (parametres insuffisants pour simulation, utiliser `simuler_taxe_fonciere` avec surface et type de bien)");
       }
 
@@ -73,8 +75,13 @@ export async function rechercher(
 
     case "zonage_immobilier": {
       const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
       if (communeName) {
         const result = await consulterZonageImmobilier({ commune: communeName });
+        return prefixResult(result, "📍 Zonage immobilier");
+      }
+      if (codePostal) {
+        const result = await consulterZonageImmobilier({ code_postal: codePostal });
         return prefixResult(result, "📍 Zonage immobilier");
       }
       const result = await rechercherFiche({ query, limit }, env);
@@ -83,9 +90,14 @@ export async function rechercher(
 
     case "transactions_dvf": {
       const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
       const typeLocal = extractTypeLocal(query);
       if (communeName) {
         const result = await consulterTransactionsImmobilieres({ commune: communeName, type_local: typeLocal ?? undefined });
+        return prefixResult(result, "🏠 Transactions immobilieres (DVF)");
+      }
+      if (codePostal) {
+        const result = await consulterTransactionsImmobilieres({ code_postal: codePostal, type_local: typeLocal ?? undefined });
         return prefixResult(result, "🏠 Transactions immobilieres (DVF)");
       }
       const result = await rechercherFiche({ query, limit }, env);
@@ -94,8 +106,13 @@ export async function rechercher(
 
     case "fiscalite_locale": {
       const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
       if (communeName) {
         const result = await consulterFiscaliteLocale({ commune: communeName });
+        return prefixResult(result, "📍 Fiscalite locale");
+      }
+      if (codePostal) {
+        const result = await consulterFiscaliteLocale({ code_postal: codePostal });
         return prefixResult(result, "📍 Fiscalite locale");
       }
       const result = await rechercherDoctrineFiscale({ query, limit });
@@ -221,32 +238,94 @@ export function classifyQuery(query: string): QueryCategory {
   return "fiches_dila";
 }
 
+/** Mots-cles thematiques a ne pas confondre avec des noms de commune */
+const STOP_LOWER = new Set([
+  "la", "le", "les", "des", "une", "un", "mon", "ma", "mes",
+  "quel", "cette", "tout", "tous", "son", "ses",
+  // mots-cles thematiques courants
+  "taxe", "taux", "prix", "zone", "commune", "ville",
+  "foncier", "fonciere", "immobilier", "immobiliere",
+  "habitation", "impot", "fiscal", "fiscale",
+]);
+
+const STOP_UPPER = new Set([
+  "TFB", "TFNB", "TEOM", "CFE", "TH", "TVA", "IR", "IS",
+  "BOFIP", "REI", "DVF", "TF", "DMTO", "PTZ", "LLI", "ABC",
+  "CEHR", "CSG", "CRDS", "PLM",
+]);
+
+/** Prefixes qui font partie du nom de commune (Le Mans, La Rochelle, Saint-Denis...) */
+const COMMUNE_PREFIX = /^(?:saint|sainte|le|la|les|l')[\s-]?/i;
+
 /** Tente d'extraire un nom de commune de la requete */
 export function extractCommuneName(query: string): string | null {
-  const patterns = [
-    /(?:commune\s+de|ville\s+de|taux\s+(?:a|à|de|pour)|prix\s+(?:a|à|de|pour))\s+([a-zàâäéèêëïîôùûüÿç\s-]{2,30})/i,
-    /(?:à|a|de|pour)\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ][a-zàâäéèêëïîôùûüÿç\s-]{1,29})\b/,
+  // 1. Patterns explicites : "a/de/pour/commune de/ville de COMMUNE"
+  const explicitPatterns = [
+    /(?:commune\s+de|ville\s+de|taux\s+(?:a|à|de|pour)|prix\s+(?:a|à|de|pour))\s+([a-zàâäéèêëïîôùûüÿç][a-zàâäéèêëïîôùûüÿç\s'-]{1,30})/i,
+    /(?:à|a|de|pour)\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ][a-zàâäéèêëïîôùûüÿç][a-zàâäéèêëïîôùûüÿç\s'-]{0,28})/,
   ];
 
-  for (const pattern of patterns) {
+  for (const pattern of explicitPatterns) {
     const match = query.match(pattern);
     if (match?.[1]) {
-      const candidate = match[1].trim();
-      const stopWords = ["la", "le", "les", "des", "une", "mon", "ma", "mes", "quel", "cette", "un"];
-      if (!stopWords.includes(candidate.toLowerCase())) {
-        return candidate.toUpperCase();
-      }
+      const candidate = cleanCommuneCandidate(match[1]);
+      if (candidate) return candidate;
     }
   }
 
-  const upperWords = query.match(/\b[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ]{2,})*\b/g);
+  // 2. Mot capitalise en debut de phrase ("Bondy taxe fonciere", "Saint-Denis taux")
+  //    Continuation apres espace uniquement si mot capitalise ; apres tiret : tout mot
+  const startMatch = query.match(
+    /^((?:(?:Saint|Sainte|Le|La|Les|L')[\s-]?)?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ][a-zàâäéèêëïîôùûüÿç]+(?:-[a-zàâäéèêëïîôùûüÿçA-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ]+)*(?:\s[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ][a-zàâäéèêëïîôùûüÿç]+)?)\b/,
+  );
+  if (startMatch?.[1]) {
+    const candidate = cleanCommuneCandidate(startMatch[1]);
+    if (candidate) return candidate;
+  }
+
+  // 3. Nom compose avec tiret n'importe ou ("Saint-Denis", "Fontenay-sous-Bois")
+  const hyphenMatch = query.match(
+    /\b((?:(?:Saint|Sainte|Le|La|Les|L')[\s-]?)?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇa-zàâäéèêëïîôùûüÿç]+-[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇa-zàâäéèêëïîôùûüÿç]+(?:-[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇa-zàâäéèêëïîôùûüÿç]+)*)\b/,
+  );
+  if (hyphenMatch?.[1]) {
+    const candidate = cleanCommuneCandidate(hyphenMatch[1]);
+    if (candidate) return candidate;
+  }
+
+  // 4. Mots tout en majuscules ("taux PARIS")
+  const upperWords = query.match(/\b[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ]{2,}(?:[\s-]+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ]{2,})*\b/g);
   if (upperWords?.length) {
-    const candidate = upperWords[0];
-    const stopUpper = ["TFB", "TFNB", "TEOM", "CFE", "TH", "TVA", "IR", "IS", "BOFIP", "REI", "DVF", "TF", "DMTO", "PTZ", "LLI", "ABC"];
-    if (!stopUpper.includes(candidate)) return candidate;
+    for (const candidate of upperWords) {
+      if (!STOP_UPPER.has(candidate)) return candidate;
+    }
   }
 
   return null;
+}
+
+/** Nettoie un candidat commune et verifie qu'il n'est pas un faux positif */
+function cleanCommuneCandidate(raw: string): string | null {
+  const trimmed = raw.trim().replace(/\s+/g, " ");
+  if (trimmed.length < 2) return null;
+
+  // Rejeter si c'est un stop word simple
+  if (STOP_LOWER.has(trimmed.toLowerCase())) return null;
+
+  // Rejeter si c'est un acronyme fiscal
+  if (STOP_UPPER.has(trimmed.toUpperCase())) return null;
+
+  return trimmed.toUpperCase();
+}
+
+/** Extrait un code postal 5 chiffres de la requete */
+export function extractCodePostal(query: string): string | null {
+  const match = query.match(/\b(\d{5})\b/);
+  if (!match) return null;
+  const cp = match[1];
+  // Exclure les nombres qui ressemblent a des prix (> 97999) ou des surfaces
+  const num = parseInt(cp, 10);
+  if (num < 1000 || num > 97699) return null;
+  return cp;
 }
 
 /** Extrait le type de bien immobilier de la requete */

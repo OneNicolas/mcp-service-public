@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   classifyQuery,
   extractCommuneName,
+  extractCodePostal,
   extractTypeLocal,
   extractPrix,
   extractTypeAchat,
@@ -96,6 +97,46 @@ describe("extractCommuneName", () => {
     expect(extractCommuneName("taux DMTO")).toBeNull();
     expect(extractCommuneName("PTZ eligible")).toBeNull();
     expect(extractCommuneName("zone ABC")).toBeNull();
+  });
+
+  // T23 -- Commune en debut de phrase
+  it("detecte une commune en debut de phrase", () => {
+    expect(extractCommuneName("Bondy taxe fonciere")).toBe("BONDY");
+    expect(extractCommuneName("Lyon prix immobilier")).toBe("LYON");
+    expect(extractCommuneName("Marseille taux foncier")).toBe("MARSEILLE");
+  });
+
+  // T23 -- Noms composes
+  it("detecte les noms composes avec tiret", () => {
+    expect(extractCommuneName("taux a Saint-Denis")).toBe("SAINT-DENIS");
+    expect(extractCommuneName("Saint-Denis taux")).toBe("SAINT-DENIS");
+    expect(extractCommuneName("Fontenay-sous-Bois fiscalite")).toBe("FONTENAY-SOUS-BOIS");
+  });
+
+  // T23 -- Prefixes Le/La/Les
+  it("detecte les communes avec prefixe Le/La/Les", () => {
+    expect(extractCommuneName("prix a Le Mans")).toBe("LE MANS");
+  });
+});
+
+// T23 -- Tests extractCodePostal
+describe("extractCodePostal", () => {
+  it("extrait un code postal 5 chiffres", () => {
+    expect(extractCodePostal("93140 taxe fonciere")).toBe("93140");
+    expect(extractCodePostal("taxe fonciere 75001")).toBe("75001");
+  });
+
+  it("retourne null sans code postal", () => {
+    expect(extractCodePostal("taxe fonciere Lyon")).toBeNull();
+  });
+
+  it("retourne null pour un nombre hors plage CP", () => {
+    expect(extractCodePostal("250000 euros")).toBeNull();
+    expect(extractCodePostal("00100 test")).toBeNull();
+  });
+
+  it("extrait un CP DOM-TOM", () => {
+    expect(extractCodePostal("97400 reunion")).toBe("97400");
   });
 });
 
