@@ -16,19 +16,41 @@ const PRIX_M2_NATIONAL: Record<string, number> = {
   Maison: 2200,
 };
 
-// Coefficient d'entretien selon l'ancienneté (art. 324 Q annexe III CGI)
+// T32 -- Coefficient d'entretien affine : 8 tranches (art. 324 Q annexe III CGI)
+// Courbe plus realiste selon l'age du bien
 export function getCoefEntretien(anneeConstruction?: number): { coef: number; label: string } {
-  if (!anneeConstruction) return { coef: 1.0, label: "standard (non précisé)" };
-  if (anneeConstruction >= 2010) return { coef: 1.15, label: "bon état (construction récente)" };
-  if (anneeConstruction >= 1990) return { coef: 1.05, label: "assez bon état" };
-  if (anneeConstruction >= 1970) return { coef: 1.00, label: "état normal" };
-  return { coef: 0.90, label: "vétuste (avant 1970)" };
+  if (!anneeConstruction) return { coef: 1.0, label: "standard (non pr\u00e9cis\u00e9)" };
+  const age = new Date().getFullYear() - anneeConstruction;
+  if (age <= 2) return { coef: 1.20, label: "neuf (moins de 2 ans)" };
+  if (age <= 10) return { coef: 1.15, label: "tr\u00e8s bon \u00e9tat (moins de 10 ans)" };
+  if (age <= 20) return { coef: 1.10, label: "bon \u00e9tat (10-20 ans)" };
+  if (age <= 35) return { coef: 1.05, label: "assez bon \u00e9tat (20-35 ans)" };
+  if (age <= 55) return { coef: 1.00, label: "\u00e9tat normal (35-55 ans)" };
+  if (age <= 75) return { coef: 0.95, label: "vieillissant (55-75 ans)" };
+  if (age <= 100) return { coef: 0.90, label: "v\u00e9tuste (75-100 ans)" };
+  return { coef: 0.85, label: "tr\u00e8s v\u00e9tuste (plus de 100 ans)" };
 }
 
 // Équivalences superficielles standard pour éléments de confort (art. 324 L annexe III CGI)
 export function getSurfacePonderee(surface: number, nbPieces: number): number {
   const equivalencesConfort = nbPieces * 2 + 12;
   return surface + equivalencesConfort;
+}
+
+// T32 -- Calcul de l'abattement RP facultatif sur la part communale
+// Certaines communes votent un abattement de 50% de la base imposable
+// pour la part communale de la TFB (art. 1391 B ter CGI)
+export function calcAbattementRP(
+  baseImposable: number,
+  tauxCommune: number,
+): { montantAvecAbattement: number; economie: number } {
+  const partCommuneSansAbattement = baseImposable * (tauxCommune / 100);
+  // Abattement de 50% sur la base imposable pour la part communale
+  const partCommuneAvecAbattement = (baseImposable * 0.5) * (tauxCommune / 100);
+  return {
+    montantAvecAbattement: partCommuneAvecAbattement,
+    economie: partCommuneSansAbattement - partCommuneAvecAbattement,
+  };
 }
 
 // --- APIs ---
@@ -82,14 +104,14 @@ export async function simulerTaxeFonciere(
 
   if (!surface || surface <= 0) {
     return {
-      content: [{ type: "text", text: "La surface habitable doit être supérieure à 0 m²." }],
+      content: [{ type: "text", text: "La surface habitable doit \u00eatre sup\u00e9rieure \u00e0 0 m\u00b2." }],
       isError: true,
     };
   }
 
   if (!type_bien || !TARIF_BASE[type_bien]) {
     return {
-      content: [{ type: "text", text: "Le type de bien doit être \"Maison\" ou \"Appartement\"." }],
+      content: [{ type: "text", text: "Le type de bien doit \u00eatre \"Maison\" ou \"Appartement\"." }],
       isError: true,
     };
   }
@@ -98,7 +120,7 @@ export async function simulerTaxeFonciere(
     const resolved = await resolveCommune(commune, code_insee, code_postal);
     if (!resolved) {
       return {
-        content: [{ type: "text", text: "Impossible de résoudre la commune. Vérifiez le nom, code INSEE ou code postal." }],
+        content: [{ type: "text", text: "Impossible de r\u00e9soudre la commune. V\u00e9rifiez le nom, code INSEE ou code postal." }],
         isError: true,
       };
     }
@@ -115,7 +137,7 @@ export async function simulerTaxeFonciere(
       return {
         content: [{
           type: "text",
-          text: `Impossible de récupérer le taux de taxe foncière pour ${resolved.nom} (${resolved.code}). Les données REI ne sont peut-être pas disponibles pour cette commune.`,
+          text: `Impossible de r\u00e9cup\u00e9rer le taux de taxe fonci\u00e8re pour ${resolved.nom} (${resolved.code}). Les donn\u00e9es REI ne sont peut-\u00eatre pas disponibles pour cette commune.`,
         }],
         isError: true,
       };
@@ -128,11 +150,11 @@ export async function simulerTaxeFonciere(
     const tarifBase = TARIF_BASE[type_bien];
 
     let ratioDVF = 1.0;
-    let dvfLabel = "non disponible (tarif national moyen appliqué)";
+    let dvfLabel = "non disponible (tarif national moyen appliqu\u00e9)";
     if (dvfData && dvfData.prixM2Median > 0 && dvfData.nbTransactions >= 5) {
       const prixNational = PRIX_M2_NATIONAL[type_bien];
       ratioDVF = Math.max(0.5, Math.min(2.5, dvfData.prixM2Median / prixNational));
-      dvfLabel = `${formatEuro(dvfData.prixM2Median)}/m² local vs ${formatEuro(prixNational)}/m² national → ratio ×${ratioDVF.toFixed(2)} (${dvfData.nbTransactions} transactions)`;
+      dvfLabel = `${formatEuro(dvfData.prixM2Median)}/m\u00b2 local vs ${formatEuro(prixNational)}/m\u00b2 national \u2192 ratio \u00d7${ratioDVF.toFixed(2)} (${dvfData.nbTransactions} transactions)`;
     }
 
     const tarifAjuste = tarifBase * ratioDVF;
@@ -364,78 +386,91 @@ export function getExonerationNeuve(anneeConstruction?: number): { eligible: boo
 function buildSimulationReport(d: SimulationData): string {
   const lines: string[] = [];
 
-  lines.push(`\uD83C\uDFE0 **Simulation taxe foncière — ${d.communeNom} (${d.communeCode})**`);
+  lines.push(`\uD83C\uDFE0 **Simulation taxe fonci\u00e8re \u2014 ${d.communeNom} (${d.communeCode})**`);
   lines.push("");
 
-  lines.push("**Caractéristiques du bien :**");
+  lines.push("**Caract\u00e9ristiques du bien :**");
   lines.push(`  Type : ${d.typeBien}`);
-  lines.push(`  Surface habitable : ${d.surface} m²`);
-  lines.push(`  Nombre de pièces : ${d.nbPieces}${d.piecesEstimees ? " (estimé)" : ""}`);
-  if (d.anneeConstruction) lines.push(`  Année de construction : ${d.anneeConstruction}`);
-  lines.push(`  Surface pondérée : ${d.surfacePonderee} m² (surface + équivalences confort)`);
-  if (d.residencePrincipale) lines.push(`  Résidence principale : oui`);
+  lines.push(`  Surface habitable : ${d.surface} m\u00b2`);
+  lines.push(`  Nombre de pi\u00e8ces : ${d.nbPieces}${d.piecesEstimees ? " (estim\u00e9)" : ""}`);
+  if (d.anneeConstruction) lines.push(`  Ann\u00e9e de construction : ${d.anneeConstruction}`);
+  lines.push(`  Surface pond\u00e9r\u00e9e : ${d.surfacePonderee} m\u00b2 (surface + \u00e9quivalences confort)`);
+  if (d.residencePrincipale) lines.push(`  R\u00e9sidence principale : oui`);
   lines.push("");
 
   // Exoneration construction neuve
   const exoNeuve = getExonerationNeuve(d.anneeConstruction);
   if (exoNeuve.eligible) {
-    lines.push(`\u2139\uFE0F **Exonération construction neuve (art. 1383 CGI)**`);
-    lines.push(`  Ce bien peut bénéficier d'une exonération de TFB pendant 2 ans (jusqu'au 31/12/${exoNeuve.anneesFin}).`);
-    lines.push(`  L'exonération s'applique sur la part communale (certaines communes la suppriment).`);
-    lines.push(`  La simulation ci-dessous montre le montant hors exonération.`);
+    lines.push(`\u2139\uFE0F **Exon\u00e9ration construction neuve (art. 1383 CGI)**`);
+    lines.push(`  Ce bien peut b\u00e9n\u00e9ficier d'une exon\u00e9ration de TFB pendant 2 ans (jusqu'au 31/12/${exoNeuve.anneesFin}).`);
+    lines.push(`  L'exon\u00e9ration s'applique sur la part communale (certaines communes la suppriment).`);
+    lines.push(`  La simulation ci-dessous montre le montant hors exon\u00e9ration.`);
     lines.push("");
   }
 
-  lines.push("**Détail du calcul :**");
-  lines.push(`  1. Tarif VLC de base (${d.typeBien}) : ${d.tarifBase} €/m²/an`);
-  lines.push(`  2. Ajustement marché local (DVF) : ${d.dvfLabel}`);
-  lines.push(`  3. Tarif ajusté : ${d.tarifAjuste.toFixed(1)} €/m²/an`);
-  lines.push(`  4. Coefficient d'entretien : ×${d.coefEntretien.toFixed(2)} (${d.labelEntretien})`);
-  lines.push(`  5. VLC estimée : ${d.surfacePonderee} m² × ${d.tarifAjuste.toFixed(1)} € × ${d.coefEntretien.toFixed(2)} = **${formatEuro(d.vlcEstimee)}**/an`);
-  lines.push(`  6. Base imposable : ${formatEuro(d.vlcEstimee)} × 50% = **${formatEuro(d.baseImposable)}**`);
+  lines.push("**D\u00e9tail du calcul :**");
+  lines.push(`  1. Tarif VLC de base (${d.typeBien}) : ${d.tarifBase} \u20ac/m\u00b2/an`);
+  lines.push(`  2. Ajustement march\u00e9 local (DVF) : ${d.dvfLabel}`);
+  lines.push(`  3. Tarif ajust\u00e9 : ${d.tarifAjuste.toFixed(1)} \u20ac/m\u00b2/an`);
+  lines.push(`  4. Coefficient d'entretien : \u00d7${d.coefEntretien.toFixed(2)} (${d.labelEntretien})`);
+  lines.push(`  5. VLC estim\u00e9e : ${d.surfacePonderee} m\u00b2 \u00d7 ${d.tarifAjuste.toFixed(1)} \u20ac \u00d7 ${d.coefEntretien.toFixed(2)} = **${formatEuro(d.vlcEstimee)}**/an`);
+  lines.push(`  6. Base imposable : ${formatEuro(d.vlcEstimee)} \u00d7 50% = **${formatEuro(d.baseImposable)}**`);
   lines.push("");
 
   // Decomposition des taux et montants par collectivite
-  lines.push(`**Décomposition des taux TFB (${d.communeNom}, ${d.exercice}) :**`);
+  lines.push(`**D\u00e9composition des taux TFB (${d.communeNom}, ${d.exercice}) :**`);
   const tauxDetails = buildTauxDetails(d);
   for (const t of tauxDetails) {
     if (t.taux > 0) {
-      lines.push(`  ${t.label} : ${t.taux.toFixed(2)} % → **${formatEuro(t.montant)}**`);
+      lines.push(`  ${t.label} : ${t.taux.toFixed(2)} % \u2192 **${formatEuro(t.montant)}**`);
     }
   }
-  lines.push(`  **Total TFB : ${d.tauxTFB.toFixed(2)} % → ${formatEuro(d.tfEstimee)}**`);
+  lines.push(`  **Total TFB : ${d.tauxTFB.toFixed(2)} % \u2192 ${formatEuro(d.tfEstimee)}**`);
   lines.push("");
 
-  lines.push(`**➡️ Taxe foncière estimée : ${formatEuro(d.tfEstimee)} / an**`);
+  lines.push(`**\u27A1\uFE0F Taxe fonci\u00e8re estim\u00e9e : ${formatEuro(d.tfEstimee)} / an**`);
   lines.push("");
 
   if (d.tauxTEOM && d.tauxTEOM > 0) {
     const teom = d.baseImposable * (d.tauxTEOM / 100);
-    lines.push(`  + TEOM estimée (${d.tauxTEOM} %) : ${formatEuro(teom)} / an`);
+    lines.push(`  + TEOM estim\u00e9e (${d.tauxTEOM} %) : ${formatEuro(teom)} / an`);
     lines.push(`  **= Total TF + TEOM : ${formatEuro(d.tfEstimee + teom)} / an**`);
+    lines.push("");
+  }
+
+  // T32 -- Scenario abattement RP si residence principale et taux commune > 0
+  if (d.residencePrincipale && d.tauxCommune > 0) {
+    const abattement = calcAbattementRP(d.baseImposable, d.tauxCommune);
+    const tfAvecAbattement = d.tfEstimee - abattement.economie;
+    lines.push(`**\uD83D\uDCA1 Sc\u00e9nario : si la commune vote l'abattement RP (art. 1391 B ter CGI) :**`);
+    lines.push(`  Abattement de 50% sur la base imposable pour la part communale :`);
+    lines.push(`  Part commune : ${formatEuro(abattement.montantAvecAbattement)} (au lieu de ${formatEuro(d.baseImposable * d.tauxCommune / 100)})`);
+    lines.push(`  \u00c9conomie : **${formatEuro(abattement.economie)}** / an`);
+    lines.push(`  **TF avec abattement : ${formatEuro(tfAvecAbattement)} / an**`);
+    lines.push(`  \u2139\uFE0F Cet abattement est facultatif. V\u00e9rifiez aupr\u00e8s de votre mairie s'il est vot\u00e9.`);
     lines.push("");
   }
 
   // Exonerations possibles
   if (d.residencePrincipale) {
-    lines.push("**Exonérations possibles (résidence principale) :**");
-    lines.push("  Les propriétaires suivants peuvent être exonérés totalement ou partiellement :");
-    lines.push("  — Personnes de 75 ans et plus sous plafond de revenu fiscal de référence");
-    lines.push("  — Titulaires de l'AAH (allocation aux adultes handicapés)");
-    lines.push("  — Titulaires de l'ASPA (allocation de solidarité aux personnes âgées)");
-    lines.push("  Ces exonérations sont automatiques si les conditions sont remplies.");
+    lines.push("**Exon\u00e9rations possibles (r\u00e9sidence principale) :**");
+    lines.push("  Les propri\u00e9taires suivants peuvent \u00eatre exon\u00e9r\u00e9s totalement ou partiellement :");
+    lines.push("  \u2014 Personnes de 75 ans et plus sous plafond de revenu fiscal de r\u00e9f\u00e9rence");
+    lines.push("  \u2014 Titulaires de l'AAH (allocation aux adultes handicap\u00e9s)");
+    lines.push("  \u2014 Titulaires de l'ASPA (allocation de solidarit\u00e9 aux personnes \u00e2g\u00e9es)");
+    lines.push("  Ces exon\u00e9rations sont automatiques si les conditions sont remplies.");
     lines.push("");
   }
 
   lines.push(`**Commune :** ${d.communeNom} (${d.communeCode})`);
-  lines.push(`  Intercommunalité : ${d.intercommunalite}`);
-  lines.push(`  Exercice fiscal de référence : ${d.exercice}`);
+  lines.push(`  Intercommunalit\u00e9 : ${d.intercommunalite}`);
+  lines.push(`  Exercice fiscal de r\u00e9f\u00e9rence : ${d.exercice}`);
   lines.push("");
 
-  lines.push("⚠️ **Estimation indicative uniquement.**");
-  lines.push("  La valeur locative cadastrale réelle dépend de paramètres internes DGFiP");
-  lines.push("  (tarifs communaux de 1970, classement en catégorie, correctifs) non publiés.");
-  lines.push("  Le taux TFB et la TEOM sont les vrais taux votés par les collectivités.");
+  lines.push("\u26A0\uFE0F **Estimation indicative uniquement.**");
+  lines.push("  La valeur locative cadastrale r\u00e9elle d\u00e9pend de param\u00e8tres internes DGFiP");
+  lines.push("  (tarifs communaux de 1970, classement en cat\u00e9gorie, correctifs) non publi\u00e9s.");
+  lines.push("  Le taux TFB et la TEOM sont les vrais taux vot\u00e9s par les collectivit\u00e9s.");
   lines.push("  Seul l'avis d'imposition fait foi.");
   lines.push("");
   lines.push("_Sources : DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr_");
@@ -454,10 +489,10 @@ function buildTauxDetails(d: SimulationData): TauxDetail[] {
   const base = d.baseImposable;
   return [
     { label: "Commune", taux: d.tauxCommune, montant: base * d.tauxCommune / 100 },
-    { label: "Intercommunalité (EPCI)", taux: d.tauxInterco, montant: base * d.tauxInterco / 100 },
+    { label: "Intercommunalit\u00e9 (EPCI)", taux: d.tauxInterco, montant: base * d.tauxInterco / 100 },
     { label: "Syndicat", taux: d.tauxSyndicat, montant: base * d.tauxSyndicat / 100 },
     { label: "GEMAPI", taux: d.tauxGemapi, montant: base * d.tauxGemapi / 100 },
-    { label: "TSE (spécial équipement)", taux: d.tauxTse, montant: base * d.tauxTse / 100 },
+    { label: "TSE (sp\u00e9cial \u00e9quipement)", taux: d.tauxTse, montant: base * d.tauxTse / 100 },
     { label: "TASA", taux: d.tauxTasa, montant: base * d.tauxTasa / 100 },
   ];
 }

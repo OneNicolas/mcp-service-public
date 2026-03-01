@@ -1,10 +1,10 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.1-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Tools](https://img.shields.io/badge/MCP%20tools-17-blueviolet)
-![Tests](https://img.shields.io/badge/tests-243%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-250%20passing-brightgreen)
 
 Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
@@ -73,7 +73,7 @@ Recherche : renouveler passeport
 
 Si les 17 outils sont charges, le serveur est pret.
 
-## Les 17 outils MCP (v1.3.0)
+## Les 17 outils MCP (v1.3.1)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
@@ -88,7 +88,7 @@ Si les 17 outils sont charges, le serveur est pret.
 | 9 | `simuler_taxe_fonciere` | REI + DVF | Estimation TF = VLC estimee x 50 % x taux REI reel |
 | 10 | `simuler_frais_notaire` | Bareme reglemente | DMTO + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | data.gouv.fr | Zone ABC (Pinel, PTZ, plafonds loyers/ressources) |
-| 12 | `comparer_communes` | REI + DVF + zonage | Tableau croise de 2 a 5 communes |
+| 12 | `comparer_communes` | REI + DVF + zonage + Education | Tableau croise de 2 a 5 communes (fiscalite, immobilier, education, services) |
 | 13 | `simuler_impot_revenu` | Bareme IR 2025 | IR progressif, quotient familial, decote, CEHR, revenus fonciers/capitaux/BIC/BNC |
 | 14 | `rechercher_convention_collective` | KALI / data.gouv.fr | Conventions collectives par IDCC ou mot-cle |
 | 15 | `rechercher_entreprise` | DINUM + KALI | Fiche entreprise par SIRET/SIREN/nom + conventions applicables |

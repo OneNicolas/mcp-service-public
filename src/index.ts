@@ -21,7 +21,7 @@ import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOl
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.3.0";
+const VERSION = "1.3.1";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -150,7 +150,7 @@ const TOOLS = [
   {
     name: "simuler_taxe_fonciere",
     description:
-      "Estime la taxe foncière annuelle d'un bien immobilier. Combine les vrais taux communaux (REI DGFiP) avec une estimation de la valeur locative cadastrale ajustée au marché local via les transactions DVF. Accepte un nom de commune, un code INSEE ou un code postal. Décompose les taux par collectivité (commune, EPCI, syndicat, GEMAPI, TSE, TASA). Détecte l'exonération construction neuve 2 ans (art. 1383 CGI). Résultat indicatif uniquement.",
+      "Estime la taxe fonci\u00e8re annuelle d'un bien immobilier. Combine les vrais taux communaux (REI DGFiP) avec une estimation de la valeur locative cadastrale ajust\u00e9e au march\u00e9 local via les transactions DVF. Accepte un nom de commune, un code INSEE ou un code postal. D\u00e9compose les taux par collectivit\u00e9 (commune, EPCI, syndicat, GEMAPI, TSE, TASA). D\u00e9tecte l'exon\u00e9ration construction neuve 2 ans (art. 1383 CGI). Simule le sc\u00e9nario d'abattement r\u00e9sidence principale si vot\u00e9 par la commune. R\u00e9sultat indicatif uniquement.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -196,7 +196,7 @@ const TOOLS = [
   {
     name: "comparer_communes",
     description:
-      "Compare 2 à 5 communes sur un tableau croisé : fiscalité locale (taux TFB, TEOM), prix immobiliers (DVF médian/m² appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...) et intercommunalité. Aide à la décision pour un déménagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
+      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...), \u00e9tablissements scolaires (\u00e9coles, coll\u00e8ges, lyc\u00e9es) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
     inputSchema: {
       type: "object" as const,
       properties: {

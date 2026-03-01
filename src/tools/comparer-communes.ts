@@ -8,6 +8,7 @@ const TABULAR_API_DVF = `https://tabular-api.data.gouv.fr/api/resources/${DVF_RE
 const ZONAGE_RESOURCE_ID = "13f7282b-8a25-43ab-9713-8bb4e476df55";
 const TABULAR_API_ZONAGE = `https://tabular-api.data.gouv.fr/api/resources/${ZONAGE_RESOURCE_ID}/data/`;
 const ANNUAIRE_API = "https://api-lannuaire.service-public.gouv.fr/api/explore/v2.1/catalog/datasets/api-lannuaire-administration/records";
+const EDUCATION_API = "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/records";
 
 const PLM_ARRONDISSEMENTS: Record<string, string[]> = {
   "75056": Array.from({ length: 20 }, (_, i) => `751${String(i + 1).padStart(2, "0")}`),
@@ -17,6 +18,12 @@ const PLM_ARRONDISSEMENTS: Record<string, string[]> = {
 
 interface ComparerCommunesArgs {
   communes: string[];
+}
+
+export interface EducationStats {
+  ecoles: number;
+  colleges: number;
+  lycees: number;
 }
 
 interface CommuneData {
@@ -31,6 +38,7 @@ interface CommuneData {
   nbTransactions: number;
   zone: string | null;
   servicesCount: number | null;
+  education: EducationStats | null;
 }
 
 export async function comparerCommunes(args: ComparerCommunesArgs): Promise<ToolResult> {
@@ -104,12 +112,13 @@ async function resolveInput(input: string): Promise<{ nom: string; code: string 
 }
 
 async function fetchCommuneData(nom: string, code: string): Promise<CommuneData> {
-  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult] = await Promise.allSettled([
+  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult] = await Promise.allSettled([
     fetchREI(code),
     fetchDvfMedianPrixM2(code, "Appartement"),
     fetchDvfMedianPrixM2(code, "Maison"),
     fetchZonage(code),
     fetchServicesCount(code),
+    fetchEducationStats(nom),
   ]);
 
   const rei = reiResult.status === "fulfilled" ? reiResult.value : null;
@@ -117,6 +126,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
   const dvfMaison = dvfMaisonResult.status === "fulfilled" ? dvfMaisonResult.value : null;
   const zone = zonageResult.status === "fulfilled" ? zonageResult.value : null;
   const services = servicesResult.status === "fulfilled" ? servicesResult.value : null;
+  const education = educationResult.status === "fulfilled" ? educationResult.value : null;
 
   return {
     nom, code,
@@ -129,6 +139,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     nbTransactions: (dvfAppart?.count ?? 0) + (dvfMaison?.count ?? 0),
     zone,
     servicesCount: services,
+    education,
   };
 }
 
@@ -148,6 +159,51 @@ async function fetchServicesCount(codeInsee: string): Promise<number | null> {
   } catch {
     return null;
   }
+}
+
+// T31 -- Compte les etablissements scolaires ouverts par type via l'API Education nationale
+export async function fetchEducationStats(communeName: string): Promise<EducationStats | null> {
+  try {
+    const params = new URLSearchParams({
+      select: "type_etablissement, count(*) as nb",
+      where: `search(nom_commune, '${sanitize(communeName)}') AND etat = 'OUVERT'`,
+      group_by: "type_etablissement",
+      limit: "20",
+    });
+
+    const response = await cachedFetch(`${EDUCATION_API}?${params}`, { ttl: CACHE_TTL.ANNUAIRE });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      results: Array<{ additional_properties?: { type_etablissement?: string; nb?: number } }>;
+    };
+
+    if (!data.results?.length) return null;
+
+    return parseEducationResults(data.results);
+  } catch {
+    return null;
+  }
+}
+
+// Extrait ecoles/colleges/lycees depuis la reponse groupee de l'API Education
+export function parseEducationResults(
+  results: Array<{ additional_properties?: { type_etablissement?: string; nb?: number } }>,
+): EducationStats {
+  let ecoles = 0;
+  let colleges = 0;
+  let lycees = 0;
+
+  for (const r of results) {
+    const type = r.additional_properties?.type_etablissement;
+    const nb = r.additional_properties?.nb ?? 0;
+    if (type === "Ecole") ecoles = nb;
+    else if (type === "Coll\u00e8ge") colleges = nb;
+    else if (type === "Lyc\u00e9e") lycees = nb;
+    // Ignorer Medico-social, Service Administratif, Information et orientation
+  }
+
+  return { ecoles, colleges, lycees };
 }
 
 async function fetchREI(codeInsee: string): Promise<{
@@ -256,7 +312,7 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const lines: string[] = [];
   const nbCommunes = data.length;
 
-  lines.push(`📊 **Comparaison de ${nbCommunes} communes**`);
+  lines.push(`\uD83D\uDCCA **Comparaison de ${nbCommunes} communes**`);
   lines.push("");
 
   const header = ["Indicateur", ...data.map((d) => `**${d.nom}**`)];
@@ -268,11 +324,16 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const exercice = data[0]?.exercice ?? "";
   lines.push(`| Taux TFB (${exercice}) | ${data.map((d) => d.tauxTFB ? `${d.tauxTFB} %` : "N/A").join(" | ")} |`);
   lines.push(`| Taux TEOM | ${data.map((d) => d.tauxTEOM ? `${d.tauxTEOM} %` : "N/A").join(" | ")} |`);
-  lines.push(`| Prix median/m² appart. | ${data.map((d) => d.prixM2Appart ? formatEuro(d.prixM2Appart) : "N/A").join(" | ")} |`);
-  lines.push(`| Prix median/m² maison | ${data.map((d) => d.prixM2Maison ? formatEuro(d.prixM2Maison) : "N/A").join(" | ")} |`);
+  lines.push(`| Prix median/m\u00B2 appart. | ${data.map((d) => d.prixM2Appart ? formatEuro(d.prixM2Appart) : "N/A").join(" | ")} |`);
+  lines.push(`| Prix median/m\u00B2 maison | ${data.map((d) => d.prixM2Maison ? formatEuro(d.prixM2Maison) : "N/A").join(" | ")} |`);
   lines.push(`| Transactions DVF (2 ans) | ${data.map((d) => d.nbTransactions > 0 ? String(d.nbTransactions) : "N/A").join(" | ")} |`);
   lines.push(`| Zone ABC | ${data.map((d) => d.zone ?? "N/A").join(" | ")} |`);
   lines.push(`| Services publics | ${data.map((d) => d.servicesCount !== null ? String(d.servicesCount) : "N/A").join(" | ")} |`);
+  // T31 -- Lignes education
+  lines.push(`| \uD83C\uDFEB Ecoles | ${data.map((d) => d.education ? String(d.education.ecoles) : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83C\uDFEB Coll\u00E8ges | ${data.map((d) => d.education ? String(d.education.colleges) : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83C\uDFEB Lyc\u00E9es | ${data.map((d) => d.education ? String(d.education.lycees) : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83C\uDFEB Total \u00E9tablissements | ${data.map((d) => d.education ? String(d.education.ecoles + d.education.colleges + d.education.lycees) : "N/A").join(" | ")} |`);
   lines.push(`| Intercommunalite | ${data.map((d) => d.intercommunalite ?? "N/A").join(" | ")} |`);
   lines.push("");
 
@@ -280,32 +341,43 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const withTFB = data.filter((d) => d.tauxTFB && d.tauxTFB !== "N/A");
   if (withTFB.length >= 2) {
     const minTFB = withTFB.reduce((a, b) => Number(a.tauxTFB) < Number(b.tauxTFB) ? a : b);
-    lines.push(`  🏆 Taxe fonciere la plus basse : **${minTFB.nom}** (${minTFB.tauxTFB} %)`);
+    lines.push(`  \uD83C\uDFC6 Taxe fonciere la plus basse : **${minTFB.nom}** (${minTFB.tauxTFB} %)`);
   }
   const withAppart = data.filter((d) => d.prixM2Appart);
   if (withAppart.length >= 2) {
     const minPrix = withAppart.reduce((a, b) => (a.prixM2Appart ?? Infinity) < (b.prixM2Appart ?? Infinity) ? a : b);
-    lines.push(`  🏆 Appartements les moins chers : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Appart!)}/m²)`);
+    lines.push(`  \uD83C\uDFC6 Appartements les moins chers : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Appart!)}/m\u00B2)`);
   }
   const withMaison = data.filter((d) => d.prixM2Maison);
   if (withMaison.length >= 2) {
     const minPrix = withMaison.reduce((a, b) => (a.prixM2Maison ?? Infinity) < (b.prixM2Maison ?? Infinity) ? a : b);
-    lines.push(`  🏆 Maisons les moins cheres : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Maison!)}/m²)`);
+    lines.push(`  \uD83C\uDFC6 Maisons les moins cheres : **${minPrix.nom}** (${formatEuro(minPrix.prixM2Maison!)}/m\u00B2)`);
   }
   // T17 -- Services publics
   const withServices = data.filter((d) => d.servicesCount !== null && d.servicesCount > 0);
   if (withServices.length >= 2) {
     const maxServices = withServices.reduce((a, b) => (a.servicesCount ?? 0) > (b.servicesCount ?? 0) ? a : b);
-    lines.push(`  🏆 Plus de services publics : **${maxServices.nom}** (${maxServices.servicesCount} organismes)`);
+    lines.push(`  \uD83C\uDFC6 Plus de services publics : **${maxServices.nom}** (${maxServices.servicesCount} organismes)`);
+  }
+  // T31 -- Education
+  const withEducation = data.filter((d) => d.education && (d.education.ecoles + d.education.colleges + d.education.lycees) > 0);
+  if (withEducation.length >= 2) {
+    const maxEdu = withEducation.reduce((a, b) => {
+      const totalA = a.education!.ecoles + a.education!.colleges + a.education!.lycees;
+      const totalB = b.education!.ecoles + b.education!.colleges + b.education!.lycees;
+      return totalA > totalB ? a : b;
+    });
+    const total = maxEdu.education!.ecoles + maxEdu.education!.colleges + maxEdu.education!.lycees;
+    lines.push(`  \uD83C\uDFC6 Plus d'\u00E9tablissements scolaires : **${maxEdu.nom}** (${total} : ${maxEdu.education!.ecoles} \u00E9coles, ${maxEdu.education!.colleges} coll\u00E8ges, ${maxEdu.education!.lycees} lyc\u00E9es)`);
   }
   lines.push("");
 
   if (errors.length > 0) {
-    lines.push(`⚠️ Communes non trouvees : ${errors.join(", ")}`);
+    lines.push(`\u26A0\uFE0F Communes non trouvees : ${errors.join(", ")}`);
     lines.push("");
   }
 
-  lines.push("_Sources : DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr_");
+  lines.push("_Sources : DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire Education nationale via data.education.gouv.fr_");
   return lines.join("\n");
 }
 

@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.3.0
+- **Version actuelle** : v1.3.1
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -146,13 +146,13 @@ src/
 | T36 | Mise a jour schema registre MCP vers 2025-12-11 |
 | T37 | Tests robustesse dispatch (edge cases ambigus, fautes de frappe, requetes mixtes) |
 
-### Sprint 11 — En cours
+### Sprint 11 — Complete ✓
 | Tache | Description |
 |-------|-------------|
 | T28 | Nouveau tool `rechercher_etablissement_scolaire` (Annuaire education, 68 000+ etablissements) |
 | T29 | Nouveau tool `consulter_resultats_lycee` (IVAL GT + Pro, taux reussite, VA, mentions) |
-| T31 | Enrichir `comparer_communes` avec donnees education (a faire) |
-| T32 | Ameliorer simulateur TF (abattements, coefficients) (a faire) |
+| T31 | Enrichir `comparer_communes` avec donnees education (ecoles, colleges, lycees via API Education nationale) |
+| T32 | Ameliorer simulateur TF (8 tranches coef entretien, scenario abattement RP, calcul effectif) |
 
 ## Contraintes techniques
 

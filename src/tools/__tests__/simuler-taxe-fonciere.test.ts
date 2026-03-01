@@ -4,60 +4,84 @@ import {
   getCoefEntretien,
   estimerPieces,
   getExonerationNeuve,
+  calcAbattementRP,
   formatEuro,
   sanitize,
 } from "../simuler-taxe-fonciere.js";
 
 describe("getSurfacePonderee", () => {
-  it("ajoute les équivalences confort (2m²/pièce + 12m² sanitaires)", () => {
+  it("ajoute les equivalences confort (2m2/piece + 12m2 sanitaires)", () => {
     expect(getSurfacePonderee(70, 3)).toBe(70 + 3 * 2 + 12);
   });
 
-  it("fonctionne pour un studio (1 pièce)", () => {
+  it("fonctionne pour un studio (1 piece)", () => {
     expect(getSurfacePonderee(25, 1)).toBe(25 + 1 * 2 + 12);
   });
 });
 
 describe("getCoefEntretien", () => {
-  it("retourne 1.0 standard si pas d'année", () => {
+  const anneeCourante = new Date().getFullYear();
+
+  it("retourne 1.0 standard si pas d'annee", () => {
     const result = getCoefEntretien();
     expect(result.coef).toBe(1.0);
   });
 
-  it("retourne 1.15 pour construction récente (>= 2010)", () => {
-    expect(getCoefEntretien(2020).coef).toBe(1.15);
-    expect(getCoefEntretien(2010).coef).toBe(1.15);
+  // T32 -- 8 tranches basees sur l'age du bien
+  it("retourne 1.20 pour un bien neuf (moins de 2 ans)", () => {
+    expect(getCoefEntretien(anneeCourante).coef).toBe(1.20);
+    expect(getCoefEntretien(anneeCourante - 1).coef).toBe(1.20);
   });
 
-  it("retourne 1.05 pour 1990-2009", () => {
-    expect(getCoefEntretien(1995).coef).toBe(1.05);
-    expect(getCoefEntretien(1990).coef).toBe(1.05);
+  it("retourne 1.15 pour un bien de moins de 10 ans", () => {
+    expect(getCoefEntretien(anneeCourante - 5).coef).toBe(1.15);
+    expect(getCoefEntretien(anneeCourante - 9).coef).toBe(1.15);
   });
 
-  it("retourne 1.00 pour 1970-1989", () => {
-    expect(getCoefEntretien(1980).coef).toBe(1.0);
-    expect(getCoefEntretien(1970).coef).toBe(1.0);
+  it("retourne 1.10 pour un bien de 10-20 ans", () => {
+    expect(getCoefEntretien(anneeCourante - 11).coef).toBe(1.10);
+    expect(getCoefEntretien(anneeCourante - 20).coef).toBe(1.10);
   });
 
-  it("retourne 0.90 pour avant 1970", () => {
-    expect(getCoefEntretien(1950).coef).toBe(0.9);
-    expect(getCoefEntretien(1969).coef).toBe(0.9);
+  it("retourne 1.05 pour un bien de 20-35 ans", () => {
+    expect(getCoefEntretien(anneeCourante - 25).coef).toBe(1.05);
+    expect(getCoefEntretien(anneeCourante - 35).coef).toBe(1.05);
+  });
+
+  it("retourne 1.00 pour un bien de 35-55 ans", () => {
+    expect(getCoefEntretien(anneeCourante - 40).coef).toBe(1.00);
+    expect(getCoefEntretien(anneeCourante - 55).coef).toBe(1.00);
+  });
+
+  it("retourne 0.95 pour un bien de 55-75 ans", () => {
+    expect(getCoefEntretien(anneeCourante - 60).coef).toBe(0.95);
+    expect(getCoefEntretien(anneeCourante - 75).coef).toBe(0.95);
+  });
+
+  it("retourne 0.90 pour un bien de 75-100 ans", () => {
+    expect(getCoefEntretien(anneeCourante - 80).coef).toBe(0.90);
+    expect(getCoefEntretien(anneeCourante - 100).coef).toBe(0.90);
+  });
+
+  it("retourne 0.85 pour un bien de plus de 100 ans", () => {
+    expect(getCoefEntretien(anneeCourante - 120).coef).toBe(0.85);
+    expect(getCoefEntretien(1850).coef).toBe(0.85);
   });
 });
 
 describe("estimerPieces", () => {
-  it("estime les pièces d'un appartement (20m²/pièce)", () => {
+  it("estime les pieces d'un appartement (20m2/piece)", () => {
     expect(estimerPieces(60, "Appartement")).toBe(3);
     expect(estimerPieces(25, "Appartement")).toBe(1);
     expect(estimerPieces(100, "Appartement")).toBe(5);
   });
 
-  it("estime les pièces d'une maison (25m²/pièce)", () => {
+  it("estime les pieces d'une maison (25m2/piece)", () => {
     expect(estimerPieces(75, "Maison")).toBe(3);
     expect(estimerPieces(125, "Maison")).toBe(5);
   });
 
-  it("retourne au minimum 1 pièce", () => {
+  it("retourne au minimum 1 piece", () => {
     expect(estimerPieces(5, "Appartement")).toBe(1);
   });
 });
@@ -91,28 +115,54 @@ describe("getExonerationNeuve", () => {
   });
 });
 
+// T32 -- Tests abattement RP
+describe("calcAbattementRP", () => {
+  it("calcule l'economie de 50% sur la part communale", () => {
+    const result = calcAbattementRP(1000, 20);
+    // Part commune sans abattement : 1000 * 20% = 200
+    // Part commune avec abattement : 500 * 20% = 100
+    expect(result.montantAvecAbattement).toBe(100);
+    expect(result.economie).toBe(100);
+  });
+
+  it("fonctionne avec un taux commune a 0", () => {
+    const result = calcAbattementRP(1000, 0);
+    expect(result.montantAvecAbattement).toBe(0);
+    expect(result.economie).toBe(0);
+  });
+
+  it("calcule correctement sur une base realiste", () => {
+    // Base imposable 2500 EUR, taux commune 15.5%
+    const result = calcAbattementRP(2500, 15.5);
+    const partSans = 2500 * 15.5 / 100;    // 387.50
+    const partAvec = 1250 * 15.5 / 100;    // 193.75
+    expect(result.montantAvecAbattement).toBeCloseTo(partAvec, 2);
+    expect(result.economie).toBeCloseTo(partSans - partAvec, 2);
+  });
+});
+
 describe("formatEuro", () => {
   it("formate un montant en euros", () => {
     const result = formatEuro(1234);
     expect(result).toContain("1");
     expect(result).toContain("234");
-    expect(result).toContain("€");
+    expect(result).toContain("\u20ac");
   });
 
-  it("arrondit à l'entier", () => {
+  it("arrondit a l'entier", () => {
     const result = formatEuro(1234.567);
     expect(result).not.toContain("567");
   });
 });
 
 describe("sanitize", () => {
-  it("supprime les caractères dangereux pour les requêtes", () => {
+  it("supprime les caracteres dangereux pour les requetes", () => {
     expect(sanitize("test'value")).toBe("testvalue");
     expect(sanitize('test"value')).toBe("testvalue");
     expect(sanitize("test\\value")).toBe("testvalue");
   });
 
-  it("laisse passer les caractères normaux", () => {
+  it("laisse passer les caracteres normaux", () => {
     expect(sanitize("75056")).toBe("75056");
     expect(sanitize("PARIS")).toBe("PARIS");
   });
