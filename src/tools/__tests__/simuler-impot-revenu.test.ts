@@ -6,6 +6,11 @@ import {
   calculerPlafonnementQF,
   calculerDecote,
   calculerCEHR,
+  calculerRevenuFoncierNet,
+  calculerMicroBicNet,
+  calculerMicroBncNet,
+  calculerPFU,
+  simulerImpotRevenu,
 } from "../simuler-impot-revenu.js";
 
 describe("calculerNbParts", () => {
@@ -145,5 +150,124 @@ describe("calculerPlafonnementQF", () => {
   it("pas de plafonnement pour couple sans enfants", () => {
     const result = calculerPlafonnementQF(60_000, 2, true);
     expect(result.plafonne).toBe(false);
+  });
+});
+
+// T31 -- Revenus fonciers
+describe("calculerRevenuFoncierNet", () => {
+  it("micro-foncier : abattement 30%", () => {
+    expect(calculerRevenuFoncierNet(10_000, "micro")).toBe(7_000);
+  });
+
+  it("micro-foncier : minimum 0", () => {
+    expect(calculerRevenuFoncierNet(0, "micro")).toBe(0);
+  });
+
+  it("reel positif : montant passe directement", () => {
+    expect(calculerRevenuFoncierNet(8_000, "reel")).toBe(8_000);
+  });
+
+  it("reel negatif : deficit foncier", () => {
+    expect(calculerRevenuFoncierNet(-5_000, "reel")).toBe(-5_000);
+  });
+});
+
+// T31 -- Micro-BIC / Micro-BNC
+describe("calculerMicroBicNet", () => {
+  it("abattement 50%", () => {
+    expect(calculerMicroBicNet(20_000)).toBe(10_000);
+  });
+
+  it("minimum 0", () => {
+    expect(calculerMicroBicNet(0)).toBe(0);
+  });
+});
+
+describe("calculerMicroBncNet", () => {
+  it("abattement 34%", () => {
+    expect(calculerMicroBncNet(10_000)).toBe(6_600);
+  });
+
+  it("minimum 0", () => {
+    expect(calculerMicroBncNet(0)).toBe(0);
+  });
+});
+
+// T31 -- PFU
+describe("calculerPFU", () => {
+  it("flat tax 30% sur 10000", () => {
+    const result = calculerPFU(10_000);
+    expect(result.ir).toBe(1_280);   // 12.8%
+    expect(result.ps).toBe(1_720);   // 17.2%
+    expect(result.total).toBe(3_000); // 30%
+  });
+
+  it("flat tax sur 0", () => {
+    const result = calculerPFU(0);
+    expect(result.total).toBe(0);
+  });
+});
+
+// Normalise tous les types d'espaces (insecables, narrow no-break, etc.) en espaces simples
+function norm(s: string): string {
+  return s.replace(/[\s\u00A0\u202F\u2007\u2009]+/g, " ");
+}
+
+// T31 -- Integration revenus complementaires dans le simulateur
+describe("simulerImpotRevenu -- revenus complementaires", () => {
+  it("integre les revenus fonciers micro au bareme", async () => {
+    const result = await simulerImpotRevenu({
+      revenu_net_imposable: 40_000,
+      revenus_fonciers: 10_000,
+      regime_foncier: "micro",
+    });
+    const text = norm(result.content[0].text);
+    expect(text).toContain("micro-foncier");
+    expect(text).toContain("7 000 EUR net");
+    expect(text).toContain("47 000 EUR");
+  });
+
+  it("integre le PFU hors bareme", async () => {
+    const result = await simulerImpotRevenu({
+      revenu_net_imposable: 40_000,
+      revenus_capitaux: 10_000,
+      regime_capitaux: "pfu",
+    });
+    const text = norm(result.content[0].text);
+    expect(text).toContain("PFU");
+    expect(text).toContain("3 000 EUR");
+  });
+
+  it("integre capitaux au bareme + PS", async () => {
+    const result = await simulerImpotRevenu({
+      revenu_net_imposable: 40_000,
+      revenus_capitaux: 10_000,
+      regime_capitaux: "bareme",
+    });
+    const text = norm(result.content[0].text);
+    expect(text).toContain("bareme");
+    expect(text).toContain("50 000 EUR");
+    expect(text).toContain("PS capitaux");
+  });
+
+  it("integre micro-BIC au bareme", async () => {
+    const result = await simulerImpotRevenu({
+      revenu_net_imposable: 30_000,
+      micro_bic: 20_000,
+    });
+    const text = norm(result.content[0].text);
+    expect(text).toContain("Micro-BIC");
+    expect(text).toContain("10 000 EUR net");
+    expect(text).toContain("40 000 EUR");
+  });
+
+  it("integre micro-BNC au bareme", async () => {
+    const result = await simulerImpotRevenu({
+      revenu_net_imposable: 30_000,
+      micro_bnc: 10_000,
+    });
+    const text = norm(result.content[0].text);
+    expect(text).toContain("Micro-BNC");
+    expect(text).toContain("6 600 EUR net");
   });
 });

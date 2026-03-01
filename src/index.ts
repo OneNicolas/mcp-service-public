@@ -18,7 +18,7 @@ import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOl
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.0.1";
+const VERSION = "1.2.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -29,11 +29,11 @@ const TOOLS = [
   {
     name: "rechercher",
     description:
-      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), transactions immobilières DVF, simulation de taxe foncière, simulation de frais de notaire, ou zonage immobilier ABC (Pinel, PTZ). À utiliser en premier si la source appropriée n'est pas évidente.",
+      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), transactions immobilières DVF, simulation de taxe foncière, simulation de frais de notaire, zonage immobilier ABC (Pinel, PTZ), simulation d'impôt sur le revenu, ou conventions collectives. À utiliser en premier si la source appropriée n'est pas évidente.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Question ou termes de recherche en langage naturel (ex: 'taxe foncière à Lyon', 'renouveler passeport', 'prix immobilier à Bondy', 'frais de notaire 250000 euros', 'zone Pinel Bordeaux')" },
+        query: { type: "string", description: "Question ou termes de recherche en langage naturel (ex: 'taxe foncière à Lyon', 'renouveler passeport', 'prix immobilier à Bondy', 'frais de notaire 250000 euros', 'zone Pinel Bordeaux', 'convention collective bâtiment', 'combien d impôt pour 40000 euros marié 2 enfants')" },
         limit: { type: "number", description: "Nombre de résultats (1-10, défaut 5)" },
       },
       required: ["query"],
@@ -210,7 +210,7 @@ const TOOLS = [
   {
     name: "simuler_impot_revenu",
     description:
-      "Estime l'impot sur le revenu (IR) selon le bareme progressif 2025 (revenus 2024). Calcule le quotient familial, applique le plafonnement, la decote et la contribution exceptionnelle hauts revenus (CEHR). Parametres : revenu net imposable (obligatoire), nombre de parts OU situation familiale + nombre d'enfants.",
+      "Estime l'impot sur le revenu (IR) selon le bareme progressif 2025 (revenus 2024). Calcule le quotient familial, applique le plafonnement, la decote et la contribution exceptionnelle hauts revenus (CEHR). Parametres : revenu net imposable (obligatoire), nombre de parts OU situation familiale + nombre d'enfants. Options : revenus fonciers (micro-foncier 30% abattement ou reel), revenus de capitaux (PFU 30% ou bareme), micro-BIC (abattement 50%), micro-BNC (abattement 34%).",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -218,6 +218,12 @@ const TOOLS = [
         nb_parts: { type: "number", description: "Nombre de parts fiscales (optionnel, defaut 1). Prioritaire sur situation + nb_enfants." },
         situation: { type: "string", enum: ["celibataire", "marie", "pacse", "divorce", "veuf"], description: "Situation familiale (optionnel, permet le calcul auto des parts)" },
         nb_enfants: { type: "number", description: "Nombre d'enfants a charge (optionnel, defaut 0)" },
+        revenus_fonciers: { type: "number", description: "Revenus fonciers bruts en euros (optionnel). Negatif possible en regime reel (deficit foncier)." },
+        regime_foncier: { type: "string", enum: ["micro", "reel"], description: "Regime foncier (defaut: micro). Micro = abattement 30 %, reel = montant net fourni." },
+        revenus_capitaux: { type: "number", description: "Revenus de capitaux mobiliers en euros (dividendes, interets, plus-values). Optionnel." },
+        regime_capitaux: { type: "string", enum: ["pfu", "bareme"], description: "Imposition des capitaux (defaut: pfu). PFU = flat tax 30 %, bareme = integration au revenu global." },
+        micro_bic: { type: "number", description: "Chiffre d'affaires micro-BIC en euros (abattement 50 %). Optionnel." },
+        micro_bnc: { type: "number", description: "Recettes micro-BNC en euros (abattement 34 %). Optionnel." },
       },
       required: ["revenu_net_imposable"],
     },
@@ -270,7 +276,7 @@ async function executeTool(
     case "comparer_communes":
       return comparerCommunes(args as { communes: string[] });
     case "simuler_impot_revenu":
-      return simulerImpotRevenu(args as { revenu_net_imposable: number; nb_parts?: number; situation?: "celibataire" | "marie" | "pacse" | "divorce" | "veuf"; nb_enfants?: number });
+      return simulerImpotRevenu(args as { revenu_net_imposable: number; nb_parts?: number; situation?: "celibataire" | "marie" | "pacse" | "divorce" | "veuf"; nb_enfants?: number; revenus_fonciers?: number; regime_foncier?: "micro" | "reel"; revenus_capitaux?: number; regime_capitaux?: "pfu" | "bareme"; micro_bic?: number; micro_bnc?: number });
     case "rechercher_convention_collective":
       return rechercherConventionCollective(args as { query?: string; idcc?: string; limit?: number });
     default:

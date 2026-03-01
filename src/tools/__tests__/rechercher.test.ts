@@ -6,6 +6,10 @@ import {
   extractTypeLocal,
   extractPrix,
   extractTypeAchat,
+  extractRevenuIR,
+  extractSituationFamiliale,
+  extractNbEnfants,
+  extractIDCC,
 } from "../rechercher.js";
 
 describe("classifyQuery", () => {
@@ -69,6 +73,17 @@ describe("classifyQuery", () => {
     expect(classifyQuery("calculer mon IR")).toBe("simulation_ir");
     expect(classifyQuery("bareme progressif impot")).toBe("simulation_ir");
     expect(classifyQuery("quotient familial")).toBe("simulation_ir");
+  });
+
+  // T28 -- Convention collective
+  it("route les requetes convention collective", () => {
+    expect(classifyQuery("convention collective batiment")).toBe("convention_collective");
+    expect(classifyQuery("IDCC 843")).toBe("convention_collective");
+    expect(classifyQuery("accord de branche metallurgie")).toBe("convention_collective");
+    expect(classifyQuery("convention boulangerie")).toBe("convention_collective");
+    expect(classifyQuery("idcc 3248")).toBe("convention_collective");
+    expect(classifyQuery("convention collective restauration")).toBe("convention_collective");
+    expect(classifyQuery("syntec convention")).toBe("convention_collective");
   });
 
   // Priorite : frais notaire avant DVF
@@ -209,5 +224,105 @@ describe("extractTypeAchat", () => {
 
   it("retourne null si absent", () => {
     expect(extractTypeAchat("frais notaire 250000")).toBeNull();
+  });
+});
+
+// T28 -- Tests extractRevenuIR
+describe("extractRevenuIR", () => {
+  it("extrait un revenu avec euros", () => {
+    expect(extractRevenuIR("impot pour 40000 euros")).toBe(40000);
+  });
+
+  it("extrait un revenu avec symbole euro", () => {
+    expect(extractRevenuIR("combien d'IR pour 55000\u20ac")).toBe(55000);
+  });
+
+  it("extrait un revenu en k", () => {
+    expect(extractRevenuIR("simuler IR 40k")).toBe(40000);
+  });
+
+  it("extrait un revenu avec espace FR", () => {
+    expect(extractRevenuIR("impot 42 000 euros")).toBe(42000);
+  });
+
+  it("retourne null sans montant", () => {
+    expect(extractRevenuIR("simuler impot sur le revenu")).toBeNull();
+  });
+
+  it("retourne null pour montant trop petit", () => {
+    expect(extractRevenuIR("impot 500 euros")).toBeNull();
+  });
+
+  it("extrait un nombre nu en contexte IR", () => {
+    expect(extractRevenuIR("simuler IR 40000")).toBe(40000);
+  });
+});
+
+// T28 -- Tests extractSituationFamiliale
+describe("extractSituationFamiliale", () => {
+  it("detecte marie", () => {
+    expect(extractSituationFamiliale("marie 2 enfants")).toBe("marie");
+  });
+
+  it("detecte pacse", () => {
+    expect(extractSituationFamiliale("pacse sans enfant")).toBe("pacse");
+  });
+
+  it("detecte celibataire", () => {
+    expect(extractSituationFamiliale("celibataire")).toBe("celibataire");
+  });
+
+  it("detecte seul comme celibataire", () => {
+    expect(extractSituationFamiliale("seul 40000 euros")).toBe("celibataire");
+  });
+
+  it("detecte couple comme marie", () => {
+    expect(extractSituationFamiliale("couple 2 enfants")).toBe("marie");
+  });
+
+  it("detecte divorce", () => {
+    expect(extractSituationFamiliale("divorcee 1 enfant")).toBe("divorce");
+  });
+
+  it("retourne null si absent", () => {
+    expect(extractSituationFamiliale("impot 40000 euros")).toBeNull();
+  });
+});
+
+// T28 -- Tests extractNbEnfants
+describe("extractNbEnfants", () => {
+  it("extrait le nombre d'enfants", () => {
+    expect(extractNbEnfants("marie 2 enfants")).toBe(2);
+  });
+
+  it("extrait 1 enfant", () => {
+    expect(extractNbEnfants("1 enfant")).toBe(1);
+  });
+
+  it("detecte sans enfant", () => {
+    expect(extractNbEnfants("sans enfant")).toBe(0);
+  });
+
+  it("retourne null si absent", () => {
+    expect(extractNbEnfants("impot 40000 euros")).toBeNull();
+  });
+});
+
+// T28 -- Tests extractIDCC
+describe("extractIDCC", () => {
+  it("extrait IDCC avec prefixe", () => {
+    expect(extractIDCC("IDCC 843")).toBe("843");
+  });
+
+  it("extrait IDCC colle", () => {
+    expect(extractIDCC("idcc3248")).toBe("3248");
+  });
+
+  it("extrait IDCC apres convention", () => {
+    expect(extractIDCC("convention 1234")).toBe("1234");
+  });
+
+  it("retourne null sans IDCC", () => {
+    expect(extractIDCC("convention collective batiment")).toBeNull();
   });
 });

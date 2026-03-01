@@ -7,6 +7,7 @@ import { simulerTaxeFonciere } from "./simuler-taxe-fonciere.js";
 import { simulerFraisNotaire } from "./simuler-frais-notaire.js";
 import { consulterZonageImmobilier } from "./consulter-zonage-immobilier.js";
 import { simulerImpotRevenu } from "./simuler-impot-revenu.js";
+import { rechercherConventionCollective } from "./rechercher-convention-collective.js";
 
 interface RechercherArgs {
   query: string;
@@ -21,7 +22,8 @@ export type QueryCategory =
   | "simulation_tf"
   | "simulation_frais_notaire"
   | "zonage_immobilier"
-  | "simulation_ir";
+  | "simulation_ir"
+  | "convention_collective";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -127,9 +129,32 @@ export async function rechercher(
     }
 
     case "simulation_ir": {
-      // Pas assez d'info dans une query libre pour simuler — on redirige vers la doctrine
+      const revenu = extractRevenuIR(query);
+      if (revenu) {
+        const situation = extractSituationFamiliale(query);
+        const nbEnfants = extractNbEnfants(query);
+        const result = await simulerImpotRevenu({
+          revenu_net_imposable: revenu,
+          ...(situation ? { situation } : {}),
+          ...(nbEnfants !== null ? { nb_enfants: nbEnfants } : {}),
+        });
+        return prefixResult(result, "🧮 Simulation impot sur le revenu");
+      }
+      // Pas assez d'info — on redirige vers la doctrine avec un message d'aide
       const result = await rechercherDoctrineFiscale({ query: "impot revenu bareme", limit });
       return prefixResult(result, "🧮 Simulation IR (utilisez `simuler_impot_revenu` avec revenu_net_imposable pour une estimation)");
+    }
+
+    case "convention_collective": {
+      const idcc = extractIDCC(query);
+      if (idcc) {
+        const result = await rechercherConventionCollective({ idcc });
+        return prefixResult(result, "📜 Convention collective");
+      }
+      // Recherche par mot-cle : nettoyer les termes generiques
+      const cleanedQuery = query.replace(/\b(convention|collective|accord|branche|nationale)\b/gi, "").trim() || query;
+      const result = await rechercherConventionCollective({ query: cleanedQuery, limit });
+      return prefixResult(result, "📜 Convention collective");
     }
 
     case "fiches_dila": {
@@ -206,6 +231,21 @@ export function classifyQuery(query: string): QueryCategory {
     if (pattern.test(q)) return "transactions_dvf";
   }
 
+  // T28 -- Patterns convention collective
+  const conventionPatterns = [
+    /\bconvention\s+collective\b/,
+    /\bidcc\b/,
+    /\baccord\s+de\s+branche\b/,
+    /\baccord\s+national\b.*\b(interprofessionnel|branche)\b/,
+    /\bconvention\b.*\b(boulangerie|metallurgie|batiment|restauration|commerce|hotellerie|transport|pharmacie|coiffure|nettoyage|securite|syntec|bureaux|spectacle|animation|aide\s+a\s+domicile|proprete)\b/,
+    /\b(boulangerie|metallurgie|syntec|hcr|batiment|restauration)\b.*\bconvention\b/,
+    /\bidcc\s*\d{1,4}\b/,
+  ];
+
+  for (const pattern of conventionPatterns) {
+    if (pattern.test(q)) return "convention_collective";
+  }
+
   // T24 -- Patterns simulation IR
   const simulationIrPatterns = [
     /\bsimuler?\b.*\b(ir|impot\s+sur\s+le\s+revenu|impot\s+revenu)\b/,
@@ -274,11 +314,8 @@ const STOP_LOWER = new Set([
 const STOP_UPPER = new Set([
   "TFB", "TFNB", "TEOM", "CFE", "TH", "TVA", "IR", "IS",
   "BOFIP", "REI", "DVF", "TF", "DMTO", "PTZ", "LLI", "ABC",
-  "CEHR", "CSG", "CRDS", "PLM",
+  "CEHR", "CSG", "CRDS", "PLM", "IDCC", "KALI", "HCR",
 ]);
-
-/** Prefixes qui font partie du nom de commune (Le Mans, La Rochelle, Saint-Denis...) */
-const COMMUNE_PREFIX = /^(?:saint|sainte|le|la|les|l')[\s-]?/i;
 
 /** Tente d'extraire un nom de commune de la requete */
 export function extractCommuneName(query: string): string | null {
@@ -406,6 +443,62 @@ function extractTypeBien(query: string): "Maison" | "Appartement" | null {
   const q = query.toLowerCase();
   if (/\bmaison\b/.test(q)) return "Maison";
   if (/\b(appartement|appart|studio|f[1-6]|t[1-6])\b/.test(q)) return "Appartement";
+  return null;
+}
+
+/** T28 -- Extrait un revenu imposable d'une query IR */
+export function extractRevenuIR(query: string): number | null {
+  // "40000 euros", "40 000 EUR", "40000€"
+  const matchEuro = query.match(/(\d[\d\s.,]*\d)\s*(?:€|euros?\b|eur\b)/i);
+  if (matchEuro) {
+    const val = parseNumberFr(matchEuro[1]);
+    if (val >= 1_000 && val < 10_000_000) return val;
+  }
+  // "40k", "40k euros"
+  const matchK = query.match(/(\d+)\s*k\s*(?:€|euros?|eur)?\b/i);
+  if (matchK) {
+    const val = parseInt(matchK[1], 10) * 1000;
+    if (val >= 1_000 && val < 10_000_000) return val;
+  }
+  // Nombre nu >= 5000 dans un contexte IR (deja route par classifyQuery)
+  const matchBare = query.match(/\b(\d{4,7})\b/);
+  if (matchBare) {
+    const val = parseInt(matchBare[1], 10);
+    if (val >= 5_000 && val < 10_000_000) return val;
+  }
+  return null;
+}
+
+/** T28 -- Extrait la situation familiale d'une query IR */
+export function extractSituationFamiliale(query: string): "celibataire" | "marie" | "pacse" | "divorce" | "veuf" | null {
+  const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\b(marie|mariee|maries)\b/.test(q)) return "marie";
+  if (/\bpacse(e|s)?\b/.test(q)) return "pacse";
+  if (/\bdivorce(e|s)?\b/.test(q)) return "divorce";
+  if (/\b(veuf|veuve)\b/.test(q)) return "veuf";
+  if (/\bcelibataire\b/.test(q)) return "celibataire";
+  if (/\b(seul|seule)\b/.test(q)) return "celibataire";
+  if (/\bcouple\b/.test(q)) return "marie";
+  return null;
+}
+
+/** T28 -- Extrait le nombre d'enfants d'une query IR */
+export function extractNbEnfants(query: string): number | null {
+  const q = query.toLowerCase();
+  const match = q.match(/(\d+)\s*enfants?/);
+  if (match) return parseInt(match[1], 10);
+  // "sans enfant"
+  if (/sans\s+enfant/.test(q)) return 0;
+  return null;
+}
+
+/** T28 -- Extrait un numero IDCC d'une query */
+export function extractIDCC(query: string): string | null {
+  const match = query.match(/\bidcc\s*(\d{1,4})\b/i);
+  if (match) return match[1];
+  // IDCC seul comme nombre 4 chiffres apres "convention"
+  const match2 = query.match(/\bconvention\b.*\b(\d{4})\b/i);
+  if (match2) return match2[1];
   return null;
 }
 

@@ -107,12 +107,11 @@ function formatOrganisme(record: AnnuaireRecord): string {
   if (f.adresse) {
     const addrs = safeParseArray(f.adresse);
     for (const addr of addrs) {
-      const a = addr as Record<string, string>;
-      if (a.type_adresse === "Adresse postale") continue;
-      const parts = [a.numero_voie, a.complement1, a.code_postal, a.nom_commune].filter(Boolean);
+      if (addr.type_adresse === "Adresse postale") continue;
+      const parts = [addr.numero_voie, addr.complement1, addr.code_postal, addr.nom_commune].filter(Boolean);
       if (parts.length) sections.push(`**Adresse** : ${parts.join(" ")}`);
-      if (a.latitude && a.longitude) {
-        sections.push(`**Coordonnées** : ${a.latitude}, ${a.longitude}`);
+      if (addr.latitude && addr.longitude) {
+        sections.push(`**Coordonnées** : ${addr.latitude}, ${addr.longitude}`);
       }
     }
   }
@@ -141,12 +140,12 @@ function formatOrganisme(record: AnnuaireRecord): string {
     const horaires = safeParseArray(f.plage_ouverture);
     if (horaires.length) {
       const formatted = horaires
-        .map((h: Record<string, string>) => {
-          const jour = h.nom_jour_debut || "";
-          const debut = h.valeur_heure_debut_1 || "";
-          const fin = h.valeur_heure_fin_1 || "";
-          const debut2 = h.valeur_heure_debut_2 || "";
-          const fin2 = h.valeur_heure_fin_2 || "";
+        .map((h) => {
+          const jour = String(h.nom_jour_debut ?? "");
+          const debut = String(h.valeur_heure_debut_1 ?? "");
+          const fin = String(h.valeur_heure_fin_1 ?? "");
+          const debut2 = String(h.valeur_heure_debut_2 ?? "");
+          const fin2 = String(h.valeur_heure_fin_2 ?? "");
           let line = `${jour} : ${debut}-${fin}`;
           if (debut2 && fin2) line += ` / ${debut2}-${fin2}`;
           return line;

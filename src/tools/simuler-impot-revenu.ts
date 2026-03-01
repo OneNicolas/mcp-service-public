@@ -17,7 +17,7 @@ const PLAFOND_QF_DEMI_PART = 1_678;
 const SEUIL_DECOTE_CELIBATAIRE = 1_929;
 const SEUIL_DECOTE_COUPLE = 3_191;
 
-// CEHR — Contribution Exceptionnelle sur les Hauts Revenus
+// CEHR -- Contribution Exceptionnelle sur les Hauts Revenus
 const CEHR_TRANCHES_SEUL = [
   { min: 250_000, max: 500_000, taux: 0.03 },
   { min: 500_000, max: Infinity, taux: 0.04 },
@@ -35,6 +35,12 @@ interface SimulerIRArgs {
   nb_parts?: number;
   situation?: Situation;
   nb_enfants?: number;
+  revenus_fonciers?: number;
+  regime_foncier?: "micro" | "reel";
+  revenus_capitaux?: number;
+  regime_capitaux?: "pfu" | "bareme";
+  micro_bic?: number;
+  micro_bnc?: number;
 }
 
 /** Calcule le nombre de parts fiscales */
@@ -129,6 +135,41 @@ export function calculerCEHR(revenu: number, isCouple: boolean): number {
   return Math.round(cehr);
 }
 
+// --- T31 : Abattements micro-regimes et PFU ---
+
+const ABATTEMENT_MICRO_FONCIER = 0.30;
+const ABATTEMENT_MICRO_BIC = 0.50;
+const ABATTEMENT_MICRO_BNC = 0.34;
+
+const TAUX_PFU_IR = 0.128;   // 12,8% IR
+const TAUX_PS = 0.172;        // 17,2% prelevements sociaux
+
+/** Calcule le revenu foncier net selon le regime */
+export function calculerRevenuFoncierNet(brut: number, regime: "micro" | "reel"): number {
+  if (regime === "micro") {
+    return Math.max(0, Math.round(brut * (1 - ABATTEMENT_MICRO_FONCIER)));
+  }
+  // Reel : montant deja net (peut etre negatif = deficit foncier)
+  return Math.round(brut);
+}
+
+/** Calcule le revenu micro-BIC net (abattement 50%) */
+export function calculerMicroBicNet(brut: number): number {
+  return Math.max(0, Math.round(brut * (1 - ABATTEMENT_MICRO_BIC)));
+}
+
+/** Calcule le revenu micro-BNC net (abattement 34%) */
+export function calculerMicroBncNet(brut: number): number {
+  return Math.max(0, Math.round(brut * (1 - ABATTEMENT_MICRO_BNC)));
+}
+
+/** Calcule la flat tax (PFU) sur les revenus de capitaux */
+export function calculerPFU(montant: number): { ir: number; ps: number; total: number } {
+  const ir = Math.round(montant * TAUX_PFU_IR);
+  const ps = Math.round(montant * TAUX_PS);
+  return { ir, ps, total: ir + ps };
+}
+
 /** Formatage euro */
 function formatEuro(n: number): string {
   return n.toLocaleString("fr-FR") + " EUR";
@@ -156,11 +197,66 @@ export async function simulerImpotRevenu(args: SimulerIRArgs): Promise<ToolResul
   }
 
   const isCouple = nbParts >= 2 && (situation === "marie" || situation === "pacse");
-  const revenuParPart = revenu_net_imposable / nbParts;
+
+  // --- T31 : Revenus complementaires integres au bareme ---
+  const detailRevenus: string[] = [];
+  let revenuComplementaire = 0;
+
+  // Revenus fonciers
+  if (args.revenus_fonciers && args.revenus_fonciers !== 0) {
+    const regime = args.regime_foncier ?? "micro";
+    const net = calculerRevenuFoncierNet(args.revenus_fonciers, regime);
+    revenuComplementaire += net;
+    if (regime === "micro") {
+      detailRevenus.push(`- **Revenus fonciers** : ${formatEuro(args.revenus_fonciers)} brut -> ${formatEuro(net)} net (micro-foncier, abattement 30 %)`);
+    } else if (net < 0) {
+      detailRevenus.push(`- **Deficit foncier** : ${formatEuro(net)} (regime reel, imputable sur le revenu global dans la limite de 10 700 EUR)`);
+    } else {
+      detailRevenus.push(`- **Revenus fonciers** : ${formatEuro(net)} net (regime reel)`);
+    }
+  }
+
+  // Micro-BIC
+  if (args.micro_bic && args.micro_bic > 0) {
+    const net = calculerMicroBicNet(args.micro_bic);
+    revenuComplementaire += net;
+    detailRevenus.push(`- **Micro-BIC** : ${formatEuro(args.micro_bic)} CA -> ${formatEuro(net)} net (abattement 50 %)`);
+  }
+
+  // Micro-BNC
+  if (args.micro_bnc && args.micro_bnc > 0) {
+    const net = calculerMicroBncNet(args.micro_bnc);
+    revenuComplementaire += net;
+    detailRevenus.push(`- **Micro-BNC** : ${formatEuro(args.micro_bnc)} recettes -> ${formatEuro(net)} net (abattement 34 %)`);
+  }
+
+  // Revenus capitaux au bareme (integres au revenu global)
+  let capitauxAuBareme = 0;
+  if (args.revenus_capitaux && args.revenus_capitaux > 0 && args.regime_capitaux === "bareme") {
+    capitauxAuBareme = args.revenus_capitaux;
+    revenuComplementaire += capitauxAuBareme;
+    detailRevenus.push(`- **Revenus de capitaux (bareme)** : ${formatEuro(capitauxAuBareme)} integres au revenu global (+17,2 % PS a part)`);
+  }
+
+  // Revenu total soumis au bareme
+  const revenuTotal = Math.max(0, revenu_net_imposable + revenuComplementaire);
+  const revenuParPart = revenuTotal / nbParts;
+
+  // --- PFU (flat tax) calcule a part ---
+  let pfuDetail: { ir: number; ps: number; total: number } | null = null;
+  if (args.revenus_capitaux && args.revenus_capitaux > 0 && (args.regime_capitaux ?? "pfu") === "pfu") {
+    pfuDetail = calculerPFU(args.revenus_capitaux);
+  }
+
+  // PS sur capitaux au bareme
+  let psCapitauxBareme = 0;
+  if (capitauxAuBareme > 0) {
+    psCapitauxBareme = Math.round(capitauxAuBareme * 0.172);
+  }
 
   // 1. IR brut avec QF
   const { irApresPlafond, plafonne } = calculerPlafonnementQF(
-    revenu_net_imposable,
+    revenuTotal,
     nbParts,
     isCouple,
   );
@@ -172,15 +268,19 @@ export async function simulerImpotRevenu(args: SimulerIRArgs): Promise<ToolResul
   // 3. TMI
   const tmi = calculerTMI(revenuParPart);
 
-  // 4. CEHR
-  const cehr = calculerCEHR(revenu_net_imposable, isCouple);
+  // 4. CEHR (sur le revenu fiscal de reference, inclut capitaux PFU)
+  const rfrPourCEHR = revenuTotal + (pfuDetail ? args.revenus_capitaux! : 0);
+  const cehr = calculerCEHR(rfrPourCEHR, isCouple);
 
-  // 5. IR net final
-  const irNet = irApresDecote + cehr;
+  // 5. Total
+  const irBareme = irApresDecote + cehr;
+  const pfuTotal = pfuDetail?.total ?? 0;
+  const irNet = irBareme + pfuTotal + psCapitauxBareme;
 
-  // 6. Taux moyen
-  const tauxMoyen = revenu_net_imposable > 0
-    ? ((irNet / revenu_net_imposable) * 100).toFixed(1)
+  // 6. Taux moyen (sur l'ensemble des revenus)
+  const revenuTotalPourTaux = revenuTotal + (pfuDetail ? args.revenus_capitaux! : 0);
+  const tauxMoyen = revenuTotalPourTaux > 0
+    ? ((irNet / revenuTotalPourTaux) * 100).toFixed(1)
     : "0.0";
 
   // --- Formatage resultat ---
@@ -188,14 +288,24 @@ export async function simulerImpotRevenu(args: SimulerIRArgs): Promise<ToolResul
     `# Simulation impot sur le revenu 2025 (revenus 2024)`,
     ``,
     `## Parametres`,
-    `- **Revenu net imposable** : ${formatEuro(revenu_net_imposable)}`,
-    `- **Nombre de parts** : ${nbParts}${situation ? ` (${situation}, ${nb_enfants} enfant${nb_enfants > 1 ? "s" : ""})` : ""}`,
-    `- **Revenu par part** : ${formatEuro(Math.round(revenuParPart))}`,
-    ``,
-    `## Resultat`,
-    `- **TMI (Taux Marginal)** : ${(tmi * 100).toFixed(0)} %`,
-    `- **IR brut** : ${formatEuro(irApresPlafond)}`,
+    `- **Revenu net imposable (salaires/pensions)** : ${formatEuro(revenu_net_imposable)}`,
   ];
+
+  if (detailRevenus.length > 0) {
+    lines.push(...detailRevenus);
+    lines.push(`- **Revenu total soumis au bareme** : ${formatEuro(revenuTotal)}`);
+  }
+
+  if (pfuDetail) {
+    lines.push(`- **Revenus de capitaux (PFU)** : ${formatEuro(args.revenus_capitaux!)} taxes a 30 % (hors bareme)`);
+  }
+
+  lines.push(`- **Nombre de parts** : ${nbParts}${situation ? ` (${situation}, ${nb_enfants} enfant${nb_enfants > 1 ? "s" : ""})` : ""}`);
+  lines.push(`- **Revenu par part** : ${formatEuro(Math.round(revenuParPart))}`);
+  lines.push(``);
+  lines.push(`## Resultat`);
+  lines.push(`- **TMI (Taux Marginal)** : ${(tmi * 100).toFixed(0)} %`);
+  lines.push(`- **IR brut** : ${formatEuro(irApresPlafond)}`);
 
   if (plafonne) {
     lines.push(`- **Plafonnement QF** : applique (plafond ${formatEuro(PLAFOND_QF_DEMI_PART)}/demi-part)`);
@@ -205,13 +315,21 @@ export async function simulerImpotRevenu(args: SimulerIRArgs): Promise<ToolResul
     lines.push(`- **Decote** : -${formatEuro(decote)}`);
   }
 
-  lines.push(`- **IR net** : ${formatEuro(irApresDecote)}`);
+  lines.push(`- **IR net (bareme)** : ${formatEuro(irApresDecote)}`);
 
   if (cehr > 0) {
     lines.push(`- **CEHR** : +${formatEuro(cehr)}`);
-    lines.push(`- **Total (IR + CEHR)** : ${formatEuro(irNet)}`);
   }
 
+  if (pfuDetail) {
+    lines.push(`- **PFU (flat tax)** : ${formatEuro(pfuDetail.total)} (IR ${formatEuro(pfuDetail.ir)} + PS ${formatEuro(pfuDetail.ps)})`);
+  }
+
+  if (psCapitauxBareme > 0) {
+    lines.push(`- **PS capitaux (bareme)** : ${formatEuro(psCapitauxBareme)}`);
+  }
+
+  lines.push(`- **Total a payer** : ${formatEuro(irNet)}`);
   lines.push(`- **Taux moyen d'imposition** : ${tauxMoyen} %`);
 
   // Detail bareme
@@ -222,13 +340,13 @@ export async function simulerImpotRevenu(args: SimulerIRArgs): Promise<ToolResul
     const max = tranche.max === Infinity ? "+" : formatEuro(tranche.max);
     const tauxPct = (tranche.taux * 100).toFixed(0);
     const applicable = revenuParPart > min;
-    const marker = applicable ? "**→**" : " ";
+    const marker = applicable ? ">>>" : "   ";
     lines.push(`${marker} ${tauxPct} % : ${formatEuro(min)} a ${max}`);
   }
 
   lines.push(``);
   lines.push(`---`);
-  lines.push(`*Estimation indicative basee sur le bareme 2025 (revenus 2024). Ne tient pas compte des reductions/credits d'impot, revenus exceptionnels, ou situations particulieres. Source : article 197 du CGI.*`);
+  lines.push(`*Estimation indicative basee sur le bareme 2025 (revenus 2024). Ne tient pas compte des reductions/credits d'impot, revenus exceptionnels, prelevement a la source deja verse, ou situations particulieres. Source : article 197 du CGI.*`);
 
   return { content: [{ type: "text", text: lines.join("\n") }] };
 }
