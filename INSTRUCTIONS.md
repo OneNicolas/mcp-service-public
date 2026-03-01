@@ -14,7 +14,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - TypeScript, Cloudflare Workers (Streamable HTTP MCP)
 - D1 SQLite (FTS5) pour les fiches DILA (~5 500 fiches, sync cron quotidien)
-- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), data.education.gouv.fr (Annuaire, IVAL), geo.api.gouv.fr, annuaire API
+- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), data.education.gouv.fr (Annuaire, IVAL, Evaluations nationales), geo.api.gouv.fr, annuaire API
 - Vitest pour les tests unitaires
 - Pas de framework MCP SDK — implementation JSON-RPC directe
 
@@ -25,7 +25,7 @@ src/
 ├── index.ts              # Router MCP + tool definitions + dispatcher (VERSION ici)
 ├── types.ts              # Env, ToolResult, Fiche...
 ├── tools/                # 1 fichier = 1 outil, export async function
-│   ├── rechercher.ts                       # Dispatch unifie intelligent (12 categories)
+│   ├── rechercher.ts                       # Dispatch unifie intelligent (13 categories)
 │   ├── rechercher-fiche.ts                 # FTS sur D1 (sanitizer + fallback LIKE + snippets)
 │   ├── lire-fiche.ts                       # Lecture fiche par ID
 │   ├── rechercher-service-local.ts         # Proxy annuaire
@@ -74,7 +74,7 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 18 outils actuels (v1.4.0)
+## Les 18 outils actuels (v1.4.1)
 
 | # | Outil | Description |
 |---|---|---|
@@ -89,7 +89,7 @@ src/
 | 9 | `simuler_taxe_fonciere` | Estimation TF = VLC estimee x 50% x taux REI reel |
 | 10 | `simuler_frais_notaire` | DMTO exact par departement + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | Zones ABC : Pinel, PTZ, plafonds loyers/ressources |
-| 12 | `comparer_communes` | Tableau croise REI + DVF + zonage + services publics (2-5 communes) |
+| 12 | `comparer_communes` | Tableau croise population/densite + REI + DVF + zonage + education + scores 6eme + services (2-5 communes) |
 | 13 | `simuler_impot_revenu` | Bareme progressif IR 2025, quotient familial, decote, CEHR |
 | 14 | `rechercher_convention_collective` | Conventions collectives KALI (IDCC, mot-cle, lien Legifrance) |
 | 15 | `rechercher_entreprise` | Recherche entreprise SIRET/SIREN/nom + conventions collectives KALI |
