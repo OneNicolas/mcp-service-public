@@ -16,12 +16,13 @@ import { rechercherConventionCollective } from "./tools/rechercher-convention-co
 import { rechercherEntreprise } from "./tools/rechercher-entreprise.js";
 import { rechercherEtablissementScolaire } from "./tools/rechercher-etablissement-scolaire.js";
 import { consulterResultatsLycee } from "./tools/consulter-resultats-lycee.js";
+import { consulterEvaluationsNationales } from "./tools/consulter-evaluations-nationales.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.3.1";
+const VERSION = "1.4.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -196,7 +197,7 @@ const TOOLS = [
   {
     name: "comparer_communes",
     description:
-      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...), \u00e9tablissements scolaires (\u00e9coles, coll\u00e8ges, lyc\u00e9es) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
+      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : population et densit\u00e9, fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...), \u00e9tablissements scolaires (\u00e9coles, coll\u00e8ges, lyc\u00e9es) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -291,6 +292,21 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "consulter_evaluations_nationales",
+    description:
+      "Consulte les resultats des evaluations nationales (6eme et CE2) par departement. Compare les scores departementaux au niveau national, avec repartition par groupes de niveau et tendance annuelle. Accepte un nom de commune, un code postal ou un code departement. Source : DEPP via data.education.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Bondy', 'Lyon') — resout le departement automatiquement" },
+        code_postal: { type: "string", description: "Code postal (ex: '93140') — resout le departement automatiquement" },
+        code_departement: { type: "string", description: "Code departement direct (ex: '93', '75', '2A', '971')" },
+        niveau: { type: "string", enum: ["6eme", "CE2", "tous"], description: "Niveau scolaire (defaut: 'tous')" },
+        annee: { type: "number", description: "Annee scolaire (ex: 2025). Par defaut : derniere disponible." },
+      },
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -335,6 +351,8 @@ async function executeTool(
       return rechercherEtablissementScolaire(args as { commune?: string; code_postal?: string; code_insee?: string; type?: string; statut?: "public" | "prive"; nom?: string; limit?: number });
     case "consulter_resultats_lycee":
       return consulterResultatsLycee(args as { commune?: string; code_postal?: string; code_insee?: string; nom_lycee?: string; type?: "gt" | "pro" | "tous"; limit?: number });
+    case "consulter_evaluations_nationales":
+      return consulterEvaluationsNationales(args as { commune?: string; code_postal?: string; code_departement?: string; niveau?: "6eme" | "CE2" | "tous"; annee?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }

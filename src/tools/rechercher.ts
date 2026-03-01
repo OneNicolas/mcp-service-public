@@ -11,6 +11,7 @@ import { rechercherConventionCollective } from "./rechercher-convention-collecti
 import { rechercherEntreprise } from "./rechercher-entreprise.js";
 import { rechercherEtablissementScolaire } from "./rechercher-etablissement-scolaire.js";
 import { consulterResultatsLycee } from "./consulter-resultats-lycee.js";
+import { consulterEvaluationsNationales } from "./consulter-evaluations-nationales.js";
 
 interface RechercherArgs {
   query: string;
@@ -29,7 +30,8 @@ export type QueryCategory =
   | "convention_collective"
   | "recherche_entreprise"
   | "etablissement_scolaire"
-  | "resultats_lycee";
+  | "resultats_lycee"
+  | "evaluations_nationales";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -188,6 +190,16 @@ export async function rechercher(
       return prefixResult(result, "\uD83C\uDF93 Resultats lycees (IVAL)");
     }
 
+    case "evaluations_nationales": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const codeDept = extractCodeDepartement(query);
+      const loc = codeDept ? { code_departement: codeDept } : communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
+      const niveau = extractNiveauScolaire(query);
+      const result = await consulterEvaluationsNationales({ ...loc, ...(niveau ? { niveau } : {}) });
+      return prefixResult(result, "\uD83D\uDCCA Evaluations nationales");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -286,6 +298,22 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of conventionPatterns) {
     if (pattern.test(q)) return "convention_collective";
+  }
+
+  // T39 -- Patterns evaluations nationales (avant IVAL et education general)
+  const evalNatPatterns = [
+    /\bevaluations?\s+nationales?\b/,
+    /\bscores?\s+(6eme|sixieme|ce2)\b/,
+    /\b(6eme|sixieme|ce2)\b.*\b(scores?|resultats?|niveau)\b/,
+    /\bresultats?\b.*\b(6eme|sixieme|ce2)\b/,
+    /\bips\b.*\b(departement|dept|moyen)\b/,
+    /\bniveau\s+scolaire\b.*\b(departement|dept)\b/,
+    /\b(departement|dept)\b.*\b(scores?|evaluations?|niveau\s+scolaire)\b/,
+    /\btaux\s+(de\s+)?maitrise\b.*\b(ce2|departement)\b/,
+  ];
+
+  for (const pattern of evalNatPatterns) {
+    if (pattern.test(q)) return "evaluations_nationales";
   }
 
   // T29 -- Patterns resultats lycee (IVAL) — avant education general
@@ -391,6 +419,7 @@ const STOP_UPPER = new Set([
   "BOFIP", "REI", "DVF", "TF", "DMTO", "PTZ", "LLI", "ABC",
   "CEHR", "CSG", "CRDS", "PLM", "IDCC", "KALI", "HCR",
   "SIRET", "SIREN",
+  "IPS", "IVAL", "DEPP",
 ]);
 
 /** Tente d'extraire un nom de commune de la requete */
@@ -610,6 +639,32 @@ export function extractSiren(query: string): string | null {
   // Exclure si c'est en fait un SIRET (14 chiffres)
   if (digits.match(/\d{10,}/)) return null;
   return siren ?? null;
+}
+
+/** T39 -- Extrait un code departement (2-3 chiffres ou 2A/2B) */
+export function extractCodeDepartement(query: string): string | null {
+  // "departement 93", "dept 75", "departement 2A"
+  const match = query.match(/\b(?:departement|dept)\.?\s*(\d{2,3}|2[AB])\b/i);
+  if (match) return match[1].toUpperCase();
+  // Numero isole 2-3 chiffres en fin de query ("evaluations nationales 93")
+  const trailingMatch = query.match(/\b(\d{2,3}|2[AB])\s*$/i);
+  if (trailingMatch) {
+    const val = trailingMatch[1];
+    const num = parseInt(val, 10);
+    // Valider que c'est un departement plausible
+    if (val.toUpperCase() === "2A" || val.toUpperCase() === "2B") return val.toUpperCase();
+    if (num >= 1 && num <= 95) return val;
+    if (num >= 971 && num <= 976) return val;
+  }
+  return null;
+}
+
+/** T39 -- Extrait le niveau scolaire (6eme/CE2) */
+export function extractNiveauScolaire(query: string): "6eme" | "CE2" | null {
+  const q = query.toLowerCase();
+  if (/\b(6eme|sixieme|6\u00e8me)\b/.test(q)) return "6eme";
+  if (/\bce2\b/.test(q)) return "CE2";
+  return null;
 }
 
 /** Nettoie et parse un nombre au format FR ("250 000" ou "250.000" ou "250,000") */

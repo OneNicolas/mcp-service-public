@@ -1,5 +1,6 @@
 import type { ToolResult } from "../types.js";
-import { resolveNomCommune, resolveCodePostal } from "../utils/geo-api.js";
+import { resolveNomCommune, resolveCodePostal, resolveCodeInsee } from "../utils/geo-api.js";
+import { fetch6emeScores, extractDeptFromInsee } from "./consulter-evaluations-nationales.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 const REI_API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets";
@@ -26,9 +27,17 @@ export interface EducationStats {
   lycees: number;
 }
 
+interface Scores6emeData {
+  scoreFrancais: number;
+  scoreMaths: number;
+  ips: number;
+}
+
 interface CommuneData {
   nom: string;
   code: string;
+  population: number | null;
+  densite: number | null;
   tauxTFB: string | null;
   tauxTEOM: string | null;
   intercommunalite: string | null;
@@ -39,6 +48,7 @@ interface CommuneData {
   zone: string | null;
   servicesCount: number | null;
   education: EducationStats | null;
+  scores6eme: Scores6emeData | null;
 }
 
 export async function comparerCommunes(args: ComparerCommunesArgs): Promise<ToolResult> {
@@ -112,13 +122,17 @@ async function resolveInput(input: string): Promise<{ nom: string; code: string 
 }
 
 async function fetchCommuneData(nom: string, code: string): Promise<CommuneData> {
-  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult] = await Promise.allSettled([
+  const codeDept = extractDeptFromInsee(code);
+
+  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult] = await Promise.allSettled([
     fetchREI(code),
     fetchDvfMedianPrixM2(code, "Appartement"),
     fetchDvfMedianPrixM2(code, "Maison"),
     fetchZonage(code),
     fetchServicesCount(code),
     fetchEducationStats(nom),
+    resolveCodeInsee(code),
+    fetchScoresForCompare(codeDept),
   ]);
 
   const rei = reiResult.status === "fulfilled" ? reiResult.value : null;
@@ -127,9 +141,17 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
   const zone = zonageResult.status === "fulfilled" ? zonageResult.value : null;
   const services = servicesResult.status === "fulfilled" ? servicesResult.value : null;
   const education = educationResult.status === "fulfilled" ? educationResult.value : null;
+  const geo = geoResult.status === "fulfilled" ? geoResult.value : null;
+  const scores6eme = scores6emeResult.status === "fulfilled" ? scores6emeResult.value : null;
+
+  // Densite = population / (surface en hectares / 100) = hab/km2
+  const population = geo?.population ?? null;
+  const densite = (population && geo?.surface) ? Math.round(population / (geo.surface / 100)) : null;
 
   return {
     nom, code,
+    population,
+    densite,
     tauxTFB: rei?.tauxTFB ?? null,
     tauxTEOM: rei?.tauxTEOM ?? null,
     intercommunalite: rei?.intercommunalite ?? null,
@@ -140,7 +162,24 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     zone,
     servicesCount: services,
     education,
+    scores6eme,
   };
+}
+
+// T40 -- Fetch scores 6eme pour le departement de la commune
+async function fetchScoresForCompare(codeDept: string): Promise<Scores6emeData | null> {
+  try {
+    const scores = await fetch6emeScores(codeDept);
+    if (scores.length === 0) return null;
+    const latest = scores[0];
+    return {
+      scoreFrancais: latest.scoreFrancais,
+      scoreMaths: latest.scoreMaths,
+      ips: latest.ipsMoyen,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // T17 -- Compte les services publics locaux via l'API Annuaire
@@ -187,23 +226,27 @@ export async function fetchEducationStats(communeName: string): Promise<Educatio
 }
 
 // Extrait ecoles/colleges/lycees depuis la reponse groupee de l'API Education
+// Retourne null si aucun resultat ou aucun type scolaire connu
 export function parseEducationResults(
   results: Array<{ additional_properties?: { type_etablissement?: string; nb?: number } }>,
-): EducationStats {
+): EducationStats | null {
+  if (!results || results.length === 0) return null;
+
   let ecoles = 0;
   let colleges = 0;
   let lycees = 0;
+  let found = false;
 
   for (const r of results) {
     const type = r.additional_properties?.type_etablissement;
     const nb = r.additional_properties?.nb ?? 0;
-    if (type === "Ecole") ecoles = nb;
-    else if (type === "Coll\u00e8ge") colleges = nb;
-    else if (type === "Lyc\u00e9e") lycees = nb;
+    if (type === "Ecole") { ecoles = nb; found = true; }
+    else if (type === "Coll\u00e8ge") { colleges = nb; found = true; }
+    else if (type === "Lyc\u00e9e") { lycees = nb; found = true; }
     // Ignorer Medico-social, Service Administratif, Information et orientation
   }
 
-  return { ecoles, colleges, lycees };
+  return found ? { ecoles, colleges, lycees } : null;
 }
 
 async function fetchREI(codeInsee: string): Promise<{
@@ -321,6 +364,8 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   lines.push(`| ${separator.join(" | ")} |`);
 
   lines.push(`| Code INSEE | ${data.map((d) => d.code).join(" | ")} |`);
+  lines.push(`| Population | ${data.map((d) => d.population ? d.population.toLocaleString("fr-FR") : "N/A").join(" | ")} |`);
+  lines.push(`| Densite (hab/km\u00B2) | ${data.map((d) => d.densite ? d.densite.toLocaleString("fr-FR") : "N/A").join(" | ")} |`);
   const exercice = data[0]?.exercice ?? "";
   lines.push(`| Taux TFB (${exercice}) | ${data.map((d) => d.tauxTFB ? `${d.tauxTFB} %` : "N/A").join(" | ")} |`);
   lines.push(`| Taux TEOM | ${data.map((d) => d.tauxTEOM ? `${d.tauxTEOM} %` : "N/A").join(" | ")} |`);
@@ -334,10 +379,25 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   lines.push(`| \uD83C\uDFEB Coll\u00E8ges | ${data.map((d) => d.education ? String(d.education.colleges) : "N/A").join(" | ")} |`);
   lines.push(`| \uD83C\uDFEB Lyc\u00E9es | ${data.map((d) => d.education ? String(d.education.lycees) : "N/A").join(" | ")} |`);
   lines.push(`| \uD83C\uDFEB Total \u00E9tablissements | ${data.map((d) => d.education ? String(d.education.ecoles + d.education.colleges + d.education.lycees) : "N/A").join(" | ")} |`);
+  // T40 -- Scores 6eme departementaux
+  lines.push(`| \uD83D\uDCCA Score 6eme Fran\u00E7ais (dept) | ${data.map((d) => d.scores6eme ? String(d.scores6eme.scoreFrancais) : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83D\uDCCA Score 6eme Maths (dept) | ${data.map((d) => d.scores6eme ? String(d.scores6eme.scoreMaths) : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83D\uDCCA IPS moyen (dept) | ${data.map((d) => d.scores6eme ? d.scores6eme.ips.toFixed(1) : "N/A").join(" | ")} |`);
   lines.push(`| Intercommunalite | ${data.map((d) => d.intercommunalite ?? "N/A").join(" | ")} |`);
   lines.push("");
 
   lines.push("**Points cles :**");
+  // T38 -- Population et densite
+  const withPop = data.filter((d) => d.population !== null && d.population > 0);
+  if (withPop.length >= 2) {
+    const maxPop = withPop.reduce((a, b) => (a.population ?? 0) > (b.population ?? 0) ? a : b);
+    lines.push(`  \uD83C\uDFC6 Commune la plus peuplee : **${maxPop.nom}** (${maxPop.population!.toLocaleString("fr-FR")} hab.)`);
+  }
+  const withDens = data.filter((d) => d.densite !== null && d.densite > 0);
+  if (withDens.length >= 2) {
+    const maxDens = withDens.reduce((a, b) => (a.densite ?? 0) > (b.densite ?? 0) ? a : b);
+    lines.push(`  \uD83C\uDFC6 Commune la plus dense : **${maxDens.nom}** (${maxDens.densite!.toLocaleString("fr-FR")} hab/km\u00B2)`);
+  }
   const withTFB = data.filter((d) => d.tauxTFB && d.tauxTFB !== "N/A");
   if (withTFB.length >= 2) {
     const minTFB = withTFB.reduce((a, b) => Number(a.tauxTFB) < Number(b.tauxTFB) ? a : b);
@@ -370,6 +430,29 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     const total = maxEdu.education!.ecoles + maxEdu.education!.colleges + maxEdu.education!.lycees;
     lines.push(`  \uD83C\uDFC6 Plus d'\u00E9tablissements scolaires : **${maxEdu.nom}** (${total} : ${maxEdu.education!.ecoles} \u00E9coles, ${maxEdu.education!.colleges} coll\u00E8ges, ${maxEdu.education!.lycees} lyc\u00E9es)`);
   }
+  // T40 -- Meilleur score scolaire (ecart > 5 points)
+  const withScores = data.filter((d) => d.scores6eme !== null);
+  if (withScores.length >= 2) {
+    const best = withScores.reduce((a, b) => {
+      const avgA = (a.scores6eme!.scoreFrancais + a.scores6eme!.scoreMaths) / 2;
+      const avgB = (b.scores6eme!.scoreFrancais + b.scores6eme!.scoreMaths) / 2;
+      return avgA > avgB ? a : b;
+    });
+    const worst = withScores.reduce((a, b) => {
+      const avgA = (a.scores6eme!.scoreFrancais + a.scores6eme!.scoreMaths) / 2;
+      const avgB = (b.scores6eme!.scoreFrancais + b.scores6eme!.scoreMaths) / 2;
+      return avgA < avgB ? a : b;
+    });
+    const ecart = ((best.scores6eme!.scoreFrancais + best.scores6eme!.scoreMaths) - (worst.scores6eme!.scoreFrancais + worst.scores6eme!.scoreMaths)) / 2;
+    if (ecart > 5) {
+      lines.push(`  \uD83C\uDFC6 Meilleur score scolaire (dept) : **${best.nom}** (moy. ${Math.round((best.scores6eme!.scoreFrancais + best.scores6eme!.scoreMaths) / 2)})`);
+    }
+  }
+  lines.push("");
+  // Note donnees departementales
+  if (withScores.length > 0) {
+    lines.push("_Note : Scores 6eme et IPS = donnees departementales, non communales._");
+  }
   lines.push("");
 
   if (errors.length > 0) {
@@ -377,7 +460,7 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     lines.push("");
   }
 
-  lines.push("_Sources : DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire Education nationale via data.education.gouv.fr_");
+  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales DEPP via data.education.gouv.fr_");
   return lines.join("\n");
 }
 

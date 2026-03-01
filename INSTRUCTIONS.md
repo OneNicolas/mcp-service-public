@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.3.1
+- **Version actuelle** : v1.4.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -42,6 +42,7 @@ src/
 │   ├── rechercher-entreprise.ts            # Recherche entreprise SIRET/SIREN/nom + enrichissement KALI
 │   ├── rechercher-etablissement-scolaire.ts # Annuaire education (ecoles, colleges, lycees)
 │   ├── consulter-resultats-lycee.ts        # IVAL lycees GT + Pro (taux reussite, VA, mentions)
+│   ├── consulter-evaluations-nationales.ts # Evaluations nationales 6eme + CE2 par departement
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -50,10 +51,12 @@ src/
 │       ├── simuler-impot-revenu.test.ts
 │       ├── rechercher-entreprise.test.ts
 │       ├── rechercher-etablissement-scolaire.test.ts
-│       └── consulter-resultats-lycee.test.ts
+│       ├── consulter-resultats-lycee.test.ts
+│       ├── consulter-evaluations-nationales.test.ts
+│       └── comparer-communes-education.test.ts
 ├── utils/
 │   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
-│   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune
+│   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune, resolveCodeInsee
 │   └── stats.ts          # Logging appels outils + dashboard
 ├── admin/
 │   └── dashboard.ts      # Dashboard HTML admin
@@ -71,11 +74,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 17 outils actuels (v1.3.0)
+## Les 18 outils actuels (v1.4.0)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (12 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee) |
+| 1 | `rechercher` | Dispatch unifie (13 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -92,6 +95,7 @@ src/
 | 15 | `rechercher_entreprise` | Recherche entreprise SIRET/SIREN/nom + conventions collectives KALI |
 | 16 | `rechercher_etablissement_scolaire` | Annuaire education (68 000+ ecoles, colleges, lycees par commune) |
 | 17 | `consulter_resultats_lycee` | IVAL lycees GT + Pro (taux reussite bac, VA, mentions, acces 2nde-bac) |
+| 18 | `consulter_evaluations_nationales` | Evaluations nationales 6eme + CE2 par departement (scores, IPS, groupes, tendance) |
 
 ## Historique des sprints
 
@@ -153,6 +157,14 @@ src/
 | T29 | Nouveau tool `consulter_resultats_lycee` (IVAL GT + Pro, taux reussite, VA, mentions) |
 | T31 | Enrichir `comparer_communes` avec donnees education (ecoles, colleges, lycees via API Education nationale) |
 | T32 | Ameliorer simulateur TF (8 tranches coef entretien, scenario abattement RP, calcul effectif) |
+
+### Sprint 12 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T38 | Donnees demographiques dans `comparer_communes` (population, densite via geo.api.gouv.fr) |
+| T39 | Nouveau tool `consulter_evaluations_nationales` (scores 6eme + CE2 par departement, IPS) |
+| T40 | Integrer scores 6eme dans `comparer_communes` (francais, maths, IPS par departement) |
+| T41 | Tests robustesse education + dispatch (parseEducationResults edge cases, nouveaux patterns) |
 
 ## Contraintes techniques
 

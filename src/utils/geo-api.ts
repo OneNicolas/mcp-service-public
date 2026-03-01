@@ -9,6 +9,7 @@ export interface CommuneGeo {
   code: string; // code INSEE
   codesPostaux: string[];
   population?: number;
+  surface?: number; // en hectares
 }
 
 /** Résout un code postal en liste de communes (un CP peut couvrir plusieurs communes) */
@@ -18,7 +19,7 @@ export async function resolveCodePostal(codePostal: string): Promise<CommuneGeo[
     throw new Error(`Code postal invalide : "${codePostal}". Format attendu : 5 chiffres.`);
   }
 
-  const url = `${GEO_API_BASE}/communes?codePostal=${cp}&fields=nom,code,codesPostaux,population&format=json`;
+  const url = `${GEO_API_BASE}/communes?codePostal=${cp}&fields=nom,code,codesPostaux,population,surface&format=json`;
   const response = await cachedFetch(url, { ttl: CACHE_TTL.GEO_API });
 
   if (!response.ok) {
@@ -47,4 +48,18 @@ export async function resolveNomCommune(nom: string): Promise<{ nom: string; cod
 
   const communes = (await response.json()) as Array<{ nom: string; code: string }>;
   return communes.length > 0 ? communes[0] : null;
+}
+
+/** Résout un code INSEE en données complètes (nom, population, surface) */
+export async function resolveCodeInsee(code: string): Promise<CommuneGeo | null> {
+  const cleaned = code.trim();
+  if (!cleaned) return null;
+
+  const url = `${GEO_API_BASE}/communes/${encodeURIComponent(cleaned)}?fields=nom,code,population,surface`;
+  const response = await cachedFetch(url, { ttl: CACHE_TTL.GEO_API });
+
+  if (!response.ok) return null;
+
+  const commune = (await response.json()) as CommuneGeo;
+  return commune?.code ? commune : null;
 }
