@@ -1,12 +1,12 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.2.2-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-15-blueviolet)
-![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-17-blueviolet)
+![Tests](https://img.shields.io/badge/tests-243%20passing-brightgreen)
 
-Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
 ## Installation
 
@@ -22,7 +22,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 2. Section **Integrations** > **MCP**
 3. Cliquer **Ajouter une integration**
 4. Coller l'URL ci-dessus
-5. Les 15 outils apparaissent automatiquement
+5. Les 17 outils apparaissent automatiquement
 
 ### Claude Desktop
 
@@ -71,9 +71,9 @@ Apres connexion, testez avec une requete simple :
 Recherche : renouveler passeport
 ```
 
-Si les 15 outils sont charges, le serveur est pret.
+Si les 17 outils sont charges, le serveur est pret.
 
-## Les 15 outils MCP (v1.2.2)
+## Les 17 outils MCP (v1.3.0)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
@@ -92,6 +92,8 @@ Si les 15 outils sont charges, le serveur est pret.
 | 13 | `simuler_impot_revenu` | Bareme IR 2025 | IR progressif, quotient familial, decote, CEHR, revenus fonciers/capitaux/BIC/BNC |
 | 14 | `rechercher_convention_collective` | KALI / data.gouv.fr | Conventions collectives par IDCC ou mot-cle |
 | 15 | `rechercher_entreprise` | DINUM + KALI | Fiche entreprise par SIRET/SIREN/nom + conventions applicables |
+| 16 | `rechercher_etablissement_scolaire` | data.education.gouv.fr | Ecoles, colleges, lycees par commune (68 000+ etablissements) |
+| 17 | `consulter_resultats_lycee` | DEPP / IVAL | Taux reussite bac, valeur ajoutee, acces 2nde-bac, mentions |
 
 ## Exemples d'appels
 
@@ -130,6 +132,19 @@ Si les 15 outils sont charges, le serveur est pret.
 ```json
 { "name": "rechercher_convention_collective", "arguments": { "query": "boulangerie" } }
 { "name": "rechercher_convention_collective", "arguments": { "idcc": "3248" } }
+```
+
+### Etablissements scolaires
+```json
+{ "name": "rechercher_etablissement_scolaire", "arguments": { "commune": "Lyon", "type": "lycee" } }
+{ "name": "rechercher_etablissement_scolaire", "arguments": { "code_postal": "93140", "statut": "public" } }
+{ "name": "rechercher_etablissement_scolaire", "arguments": { "nom": "Lacassagne" } }
+```
+
+### Resultats lycees (IVAL)
+```json
+{ "name": "consulter_resultats_lycee", "arguments": { "commune": "Lyon" } }
+{ "name": "consulter_resultats_lycee", "arguments": { "nom_lycee": "Lacassagne", "type": "gt" } }
 ```
 
 ### Consulter le zonage ABC
@@ -196,6 +211,14 @@ Revenus complementaires supportes : fonciers (micro/reel), capitaux mobiliers (P
 
 Recherche via l'API Recherche d'entreprises (DINUM) par SIRET, SIREN ou nom. Retourne forme juridique, NAF, effectif, dirigeants, adresse, et chaine vers KALI pour les conventions collectives applicables.
 
+### Etablissements scolaires
+
+Proxy vers l'API Explore v2.1 de data.education.gouv.fr (Annuaire de l'education nationale, 68 000+ etablissements). Filtres : commune, code postal, type (ecole/college/lycee), statut (public/prive), nom. Retourne adresse, contact, voies d'enseignement, services (restauration, internat, ULIS, SEGPA), sections (europeenne, internationale, sport, arts).
+
+### Resultats lycees (IVAL)
+
+Proxy vers les datasets IVAL GT et Pro de la DEPP (data.education.gouv.fr). Requetes paralleles GT + Pro, tri par valeur ajoutee decroissante. Indicateurs : taux de reussite au bac, valeur ajoutee, taux d'acces 2nde-bac, taux de mentions, effectifs par niveau. Sessions 2012-2024.
+
 ## Architecture
 
 ```
@@ -210,6 +233,7 @@ Cloudflare Workers (plan payant)
 +-- Proxy API (temps reel, cache + retry)
 |   +-- data.economie.gouv.fr -> REI fiscalite locale + BOFiP
 |   +-- data.gouv.fr -> DVF transactions + Zonage ABC + KALI conventions
+|   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees
 |   +-- geo.api.gouv.fr -> Resolution communes
 |   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
 |   +-- API Annuaire -> services publics locaux
@@ -226,6 +250,7 @@ Cloudflare Workers (plan payant)
 | data.gouv.fr | Proxy temps reel | DVF transactions, Zonage ABC, KALI conventions collectives |
 | geo.api.gouv.fr | Proxy temps reel | Resolution communes (CP/INSEE/nom) |
 | recherche-entreprises.api.gouv.fr | Proxy temps reel | Entreprises (SIRET/SIREN/nom, dirigeants, IDCC) |
+| data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees |
 
 ### Endpoints
 
@@ -245,7 +270,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (210 tests)
+npx vitest run       # Tests unitaires (243 tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```

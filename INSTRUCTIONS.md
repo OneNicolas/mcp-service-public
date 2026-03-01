@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.2.2
+- **Version actuelle** : v1.3.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -14,7 +14,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - TypeScript, Cloudflare Workers (Streamable HTTP MCP)
 - D1 SQLite (FTS5) pour les fiches DILA (~5 500 fiches, sync cron quotidien)
-- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), geo.api.gouv.fr, annuaire API
+- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), data.education.gouv.fr (Annuaire, IVAL), geo.api.gouv.fr, annuaire API
 - Vitest pour les tests unitaires
 - Pas de framework MCP SDK — implementation JSON-RPC directe
 
@@ -25,7 +25,7 @@ src/
 ├── index.ts              # Router MCP + tool definitions + dispatcher (VERSION ici)
 ├── types.ts              # Env, ToolResult, Fiche...
 ├── tools/                # 1 fichier = 1 outil, export async function
-│   ├── rechercher.ts                       # Dispatch unifie intelligent (8 categories)
+│   ├── rechercher.ts                       # Dispatch unifie intelligent (12 categories)
 │   ├── rechercher-fiche.ts                 # FTS sur D1 (sanitizer + fallback LIKE + snippets)
 │   ├── lire-fiche.ts                       # Lecture fiche par ID
 │   ├── rechercher-service-local.ts         # Proxy annuaire
@@ -40,13 +40,17 @@ src/
 │   ├── simuler-impot-revenu.ts            # Bareme progressif IR 2025, QF, decote, CEHR
 │   ├── rechercher-convention-collective.ts # Conventions collectives KALI via data.gouv.fr
 │   ├── rechercher-entreprise.ts            # Recherche entreprise SIRET/SIREN/nom + enrichissement KALI
+│   ├── rechercher-etablissement-scolaire.ts # Annuaire education (ecoles, colleges, lycees)
+│   ├── consulter-resultats-lycee.ts        # IVAL lycees GT + Pro (taux reussite, VA, mentions)
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
 │       ├── rechercher-fiche.test.ts
 │       ├── simuler-frais-notaire.test.ts
 │       ├── simuler-impot-revenu.test.ts
-│       └── rechercher-entreprise.test.ts
+│       ├── rechercher-entreprise.test.ts
+│       ├── rechercher-etablissement-scolaire.test.ts
+│       └── consulter-resultats-lycee.test.ts
 ├── utils/
 │   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
 │   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune
@@ -67,11 +71,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 15 outils actuels (v1.2.2)
+## Les 17 outils actuels (v1.3.0)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (10 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises) |
+| 1 | `rechercher` | Dispatch unifie (12 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -86,6 +90,8 @@ src/
 | 13 | `simuler_impot_revenu` | Bareme progressif IR 2025, quotient familial, decote, CEHR |
 | 14 | `rechercher_convention_collective` | Conventions collectives KALI (IDCC, mot-cle, lien Legifrance) |
 | 15 | `rechercher_entreprise` | Recherche entreprise SIRET/SIREN/nom + conventions collectives KALI |
+| 16 | `rechercher_etablissement_scolaire` | Annuaire education (68 000+ ecoles, colleges, lycees par commune) |
+| 17 | `consulter_resultats_lycee` | IVAL lycees GT + Pro (taux reussite bac, VA, mentions, acces 2nde-bac) |
 
 ## Historique des sprints
 
@@ -139,6 +145,14 @@ src/
 | T35 | Evolution prix DVF multi-annees (parametre `evolution: true`, 2019-aujourd'hui) |
 | T36 | Mise a jour schema registre MCP vers 2025-12-11 |
 | T37 | Tests robustesse dispatch (edge cases ambigus, fautes de frappe, requetes mixtes) |
+
+### Sprint 11 — En cours
+| Tache | Description |
+|-------|-------------|
+| T28 | Nouveau tool `rechercher_etablissement_scolaire` (Annuaire education, 68 000+ etablissements) |
+| T29 | Nouveau tool `consulter_resultats_lycee` (IVAL GT + Pro, taux reussite, VA, mentions) |
+| T31 | Enrichir `comparer_communes` avec donnees education (a faire) |
+| T32 | Ameliorer simulateur TF (abattements, coefficients) (a faire) |
 
 ## Contraintes techniques
 
