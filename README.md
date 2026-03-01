@@ -1,12 +1,12 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.3.1-blue)
+![Version](https://img.shields.io/badge/version-1.4.1-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-17-blueviolet)
-![Tests](https://img.shields.io/badge/tests-250%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-18-blueviolet)
+![Tests](https://img.shields.io/badge/tests-260%20passing-brightgreen)
 
-Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
 ## Installation
 
@@ -22,7 +22,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 2. Section **Integrations** > **MCP**
 3. Cliquer **Ajouter une integration**
 4. Coller l'URL ci-dessus
-5. Les 17 outils apparaissent automatiquement
+5. Les 18 outils apparaissent automatiquement
 
 ### Claude Desktop
 
@@ -71,13 +71,13 @@ Apres connexion, testez avec une requete simple :
 Recherche : renouveler passeport
 ```
 
-Si les 17 outils sont charges, le serveur est pret.
+Si les 18 outils sont charges, le serveur est pret.
 
-## Les 17 outils MCP (v1.3.1)
+## Les 18 outils MCP (v1.4.1)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
-| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete |
+| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (13 categories) |
 | 2 | `rechercher_fiche` | DILA / service-public.fr | Recherche plein texte dans ~5 500 fiches pratiques |
 | 3 | `lire_fiche` | DILA / service-public.fr | Lecture complete d'une fiche par identifiant (F14929, N360...) |
 | 4 | `rechercher_service_local` | API Annuaire | Services publics locaux (mairie, prefecture, CAF...) |
@@ -88,12 +88,13 @@ Si les 17 outils sont charges, le serveur est pret.
 | 9 | `simuler_taxe_fonciere` | REI + DVF | Estimation TF = VLC estimee x 50 % x taux REI reel |
 | 10 | `simuler_frais_notaire` | Bareme reglemente | DMTO + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | data.gouv.fr | Zone ABC (Pinel, PTZ, plafonds loyers/ressources) |
-| 12 | `comparer_communes` | REI + DVF + zonage + Education | Tableau croise de 2 a 5 communes (fiscalite, immobilier, education, services) |
+| 12 | `comparer_communes` | REI + DVF + zonage + Education | Tableau croise de 2 a 5 communes (population, fiscalite, immobilier, education, scores 6eme, services) |
 | 13 | `simuler_impot_revenu` | Bareme IR 2025 | IR progressif, quotient familial, decote, CEHR, revenus fonciers/capitaux/BIC/BNC |
 | 14 | `rechercher_convention_collective` | KALI / data.gouv.fr | Conventions collectives par IDCC ou mot-cle |
 | 15 | `rechercher_entreprise` | DINUM + KALI | Fiche entreprise par SIRET/SIREN/nom + conventions applicables |
 | 16 | `rechercher_etablissement_scolaire` | data.education.gouv.fr | Ecoles, colleges, lycees par commune (68 000+ etablissements) |
 | 17 | `consulter_resultats_lycee` | DEPP / IVAL | Taux reussite bac, valeur ajoutee, acces 2nde-bac, mentions |
+| 18 | `consulter_evaluations_nationales` | DEPP / data.education.gouv.fr | Scores 6eme + CE2 par departement, IPS, groupes de niveau, tendance |
 
 ## Exemples d'appels
 
@@ -145,6 +146,13 @@ Si les 17 outils sont charges, le serveur est pret.
 ```json
 { "name": "consulter_resultats_lycee", "arguments": { "commune": "Lyon" } }
 { "name": "consulter_resultats_lycee", "arguments": { "nom_lycee": "Lacassagne", "type": "gt" } }
+```
+
+### Evaluations nationales (6eme / CE2)
+```json
+{ "name": "consulter_evaluations_nationales", "arguments": { "code_departement": "93" } }
+{ "name": "consulter_evaluations_nationales", "arguments": { "commune": "Lyon", "niveau": "6eme" } }
+{ "name": "consulter_evaluations_nationales", "arguments": { "code_postal": "93140", "niveau": "CE2" } }
 ```
 
 ### Consulter le zonage ABC
@@ -233,7 +241,7 @@ Cloudflare Workers (plan payant)
 +-- Proxy API (temps reel, cache + retry)
 |   +-- data.economie.gouv.fr -> REI fiscalite locale + BOFiP
 |   +-- data.gouv.fr -> DVF transactions + Zonage ABC + KALI conventions
-|   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees
+|   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees + Evaluations nationales
 |   +-- geo.api.gouv.fr -> Resolution communes
 |   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
 |   +-- API Annuaire -> services publics locaux
@@ -250,7 +258,7 @@ Cloudflare Workers (plan payant)
 | data.gouv.fr | Proxy temps reel | DVF transactions, Zonage ABC, KALI conventions collectives |
 | geo.api.gouv.fr | Proxy temps reel | Resolution communes (CP/INSEE/nom) |
 | recherche-entreprises.api.gouv.fr | Proxy temps reel | Entreprises (SIRET/SIREN/nom, dirigeants, IDCC) |
-| data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees |
+| data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees, evaluations nationales 6eme/CE2 |
 
 ### Endpoints
 
@@ -270,7 +278,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (243 tests)
+npx vitest run       # Tests unitaires (260+ tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```
