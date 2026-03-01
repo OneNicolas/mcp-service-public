@@ -8,17 +8,70 @@
 
 Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
-## Connexion rapide
+## Installation
+
+Serveur heberge — aucune installation requise. Connectez l'URL suivante a votre client MCP :
 
 ```
 https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 ```
 
-| Client | Configuration |
-|--------|-------------|
-| **Claude.ai** | Parametres > MCP > Ajouter URL ci-dessus (Streamable HTTP) |
-| **Claude Desktop** | `"command": "npx", "args": ["-y", "mcp-remote", "https://mcp-service-public.nhaultcoeur.workers.dev/mcp"]` |
-| **VS Code / Cursor** | `.vscode/mcp.json` avec URL ci-dessus |
+### Claude.ai (web / mobile)
+
+1. Ouvrir **Parametres** (icone engrenage)
+2. Section **Integrations** > **MCP**
+3. Cliquer **Ajouter une integration**
+4. Coller l'URL ci-dessus
+5. Les 15 outils apparaissent automatiquement
+
+### Claude Desktop
+
+Ajouter dans `claude_desktop_config.json` :
+
+```json
+{
+  "mcpServers": {
+    "service-public": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp-service-public.nhaultcoeur.workers.dev/mcp"]
+    }
+  }
+}
+```
+
+Emplacement du fichier :
+- **Windows** : `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS** : `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+Redemarrer Claude Desktop apres modification.
+
+### VS Code / Cursor
+
+Creer `.vscode/mcp.json` a la racine de votre projet :
+
+```json
+{
+  "servers": {
+    "service-public": {
+      "type": "sse",
+      "url": "https://mcp-service-public.nhaultcoeur.workers.dev/mcp"
+    }
+  }
+}
+```
+
+### Autres clients MCP
+
+Tout client compatible MCP Streamable HTTP peut se connecter avec l'URL ci-dessus. Consultez la documentation de votre client pour la configuration.
+
+### Verification
+
+Apres connexion, testez avec une requete simple :
+```
+Recherche : renouveler passeport
+```
+
+Si les 15 outils sont charges, le serveur est pret.
 
 ## Les 15 outils MCP (v1.2.2)
 
