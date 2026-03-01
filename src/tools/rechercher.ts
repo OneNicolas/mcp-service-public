@@ -9,6 +9,8 @@ import { consulterZonageImmobilier } from "./consulter-zonage-immobilier.js";
 import { simulerImpotRevenu } from "./simuler-impot-revenu.js";
 import { rechercherConventionCollective } from "./rechercher-convention-collective.js";
 import { rechercherEntreprise } from "./rechercher-entreprise.js";
+import { rechercherEtablissementScolaire } from "./rechercher-etablissement-scolaire.js";
+import { consulterResultatsLycee } from "./consulter-resultats-lycee.js";
 
 interface RechercherArgs {
   query: string;
@@ -25,7 +27,9 @@ export type QueryCategory =
   | "zonage_immobilier"
   | "simulation_ir"
   | "convention_collective"
-  | "recherche_entreprise";
+  | "recherche_entreprise"
+  | "etablissement_scolaire"
+  | "resultats_lycee";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -167,6 +171,23 @@ export async function rechercher(
       return prefixResult(result, "\uD83C\uDFE2 Fiche entreprise");
     }
 
+    case "etablissement_scolaire": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const typeEtab = extractTypeEtablissement(query);
+      const loc = communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
+      const result = await rechercherEtablissementScolaire({ ...loc, type: typeEtab ?? undefined, limit });
+      return prefixResult(result, "\uD83C\uDFEB Etablissements scolaires");
+    }
+
+    case "resultats_lycee": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const loc = communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
+      const result = await consulterResultatsLycee({ ...loc, limit });
+      return prefixResult(result, "\uD83C\uDF93 Resultats lycees (IVAL)");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -265,6 +286,39 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of conventionPatterns) {
     if (pattern.test(q)) return "convention_collective";
+  }
+
+  // T29 -- Patterns resultats lycee (IVAL) — avant education general
+  const ivalPatterns = [
+    /\b(resultats?|classements?|palmares|valeur\s+ajoutee|ival)\b.*\blycees?\b/,
+    /\blycees?\b.*\b(resultats?|classements?|palmares|valeur\s+ajoutee|ival)\b/,
+    /\btaux\s+(de\s+)?(reussite|acces|mentions?)\b.*\b(lycees?|bac)\b/,
+    /\b(meilleurs?|pires?|top)\s+lycees?\b/,
+    /\blycees?\b.*\b(meilleurs?|performances?|reussite\s+bac)\b/,
+    /\bival\b/,
+    /\b(reussite|mentions?)\b.*\bbac\b.*\b(lycees?|commune|ville)\b/,
+  ];
+
+  for (const pattern of ivalPatterns) {
+    if (pattern.test(q)) return "resultats_lycee";
+  }
+
+  // T28 -- Patterns etablissement scolaire
+  // Guard : exclure les requetes de type demarche/inscription (route fiches_dila)
+  const educationExclude = /\b(inscrire|inscription|droit|aide|allocation|bourse|comment|procedure|demarche)\b/;
+  if (!educationExclude.test(q)) {
+    const educationPatterns = [
+      /\b(ecole|college|lycee|etablissement\s+scolaire)s?\b.*\b(a|de|pour|dans|commune|ville|pres)\b/,
+      /\b(a|de|pour|dans)\b.*\b(ecole|college|lycee)s?\b/,
+      /\b(cherche|trouver|liste|annuaire)\b.*\b(ecole|college|lycee|etablissement)s?\b/,
+      /\b(ecole|college|lycee)s?\s+(public|prive|maternelle|elementaire|professionnel)s?\b/,
+      /\bquel(le)?s?\s+(ecole|college|lycee)s?\b/,
+      /\betablissement(s)?\s+scolaire(s)?\b/,
+    ];
+
+    for (const pattern of educationPatterns) {
+      if (pattern.test(q)) return "etablissement_scolaire";
+    }
   }
 
   // T24 -- Patterns simulation IR
@@ -521,6 +575,18 @@ export function extractIDCC(query: string): string | null {
   // IDCC seul comme nombre 4 chiffres apres "convention"
   const match2 = query.match(/\bconvention\b.*\b(\d{4})\b/i);
   if (match2) return match2[1];
+  return null;
+}
+
+/** T28 -- Extrait le type d'etablissement scolaire */
+export function extractTypeEtablissement(query: string): string | null {
+  const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\bmaternelle\b/.test(q)) return "ecole";
+  if (/\belementaire\b/.test(q)) return "ecole";
+  if (/\bprimaire\b/.test(q)) return "ecole";
+  if (/\becoles?\b/.test(q)) return "ecole";
+  if (/\bcolleges?\b/.test(q)) return "college";
+  if (/\blycees?\b/.test(q)) return "lycee";
   return null;
 }
 

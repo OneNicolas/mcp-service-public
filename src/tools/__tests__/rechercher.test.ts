@@ -12,6 +12,7 @@ import {
   extractIDCC,
   extractSiret,
   extractSiren,
+  extractTypeEtablissement,
 } from "../rechercher.js";
 
 describe("classifyQuery", () => {
@@ -481,5 +482,91 @@ describe("classifyQuery — requetes mixtes", () => {
 
   it("route IR avec situation familiale complete", () => {
     expect(classifyQuery("combien d'impot sur le revenu pour 50000 euros marie 2 enfants")).toBe("simulation_ir");
+  });
+});
+
+// T29 -- Patterns resultats lycee (IVAL)
+describe("classifyQuery — resultats lycee", () => {
+  it("route les requetes IVAL explicites", () => {
+    expect(classifyQuery("IVAL lycees de Lyon")).toBe("resultats_lycee");
+    expect(classifyQuery("ival")).toBe("resultats_lycee");
+  });
+
+  it("route les resultats et classements", () => {
+    expect(classifyQuery("resultats des lycees a Bordeaux")).toBe("resultats_lycee");
+    expect(classifyQuery("classement lycees Paris")).toBe("resultats_lycee");
+    expect(classifyQuery("palmares des lycees")).toBe("resultats_lycee");
+  });
+
+  it("route les taux de reussite bac", () => {
+    expect(classifyQuery("taux de reussite au bac Lyon")).toBe("resultats_lycee");
+    expect(classifyQuery("taux de mentions lycee Lacassagne")).toBe("resultats_lycee");
+  });
+
+  it("route les meilleurs lycees", () => {
+    expect(classifyQuery("meilleur lycee a Nantes")).toBe("resultats_lycee");
+    expect(classifyQuery("top lycees Marseille")).toBe("resultats_lycee");
+  });
+
+  it("route la valeur ajoutee lycee", () => {
+    expect(classifyQuery("valeur ajoutee lycee a Toulouse")).toBe("resultats_lycee");
+  });
+});
+
+// T28 -- Patterns etablissement scolaire
+describe("classifyQuery — education", () => {
+  it("route les recherches d'ecoles par commune", () => {
+    expect(classifyQuery("ecoles a Lyon")).toBe("etablissement_scolaire");
+    expect(classifyQuery("ecoles de Bondy")).toBe("etablissement_scolaire");
+  });
+
+  it("route les recherches de colleges", () => {
+    expect(classifyQuery("colleges a Marseille")).toBe("etablissement_scolaire");
+    expect(classifyQuery("college public dans le 93")).toBe("etablissement_scolaire");
+  });
+
+  it("route les recherches de lycees", () => {
+    expect(classifyQuery("lycees de Bordeaux")).toBe("etablissement_scolaire");
+    expect(classifyQuery("lycee prive a Nantes")).toBe("etablissement_scolaire");
+  });
+
+  it("route les etablissements scolaires", () => {
+    expect(classifyQuery("etablissements scolaires a Toulouse")).toBe("etablissement_scolaire");
+    expect(classifyQuery("quels lycees a Strasbourg")).toBe("etablissement_scolaire");
+  });
+
+  it("route l'annuaire et la liste d'etablissements", () => {
+    expect(classifyQuery("liste des ecoles de Lille")).toBe("etablissement_scolaire");
+    expect(classifyQuery("trouver un college a Rennes")).toBe("etablissement_scolaire");
+  });
+
+  it("ne confond pas avec les fiches demarches scolaires", () => {
+    // "inscrire mon enfant" n'a pas de pattern ecole+commune
+    expect(classifyQuery("comment inscrire mon enfant a l'ecole")).toBe("fiches_dila");
+  });
+});
+
+// T28 -- extractTypeEtablissement
+describe("extractTypeEtablissement", () => {
+  it("extrait ecole et variantes", () => {
+    expect(extractTypeEtablissement("ecoles a Lyon")).toBe("ecole");
+    expect(extractTypeEtablissement("maternelle a Paris")).toBe("ecole");
+    expect(extractTypeEtablissement("elementaire a Bondy")).toBe("ecole");
+    expect(extractTypeEtablissement("primaire a Nantes")).toBe("ecole");
+  });
+
+  it("extrait college", () => {
+    expect(extractTypeEtablissement("college public Marseille")).toBe("college");
+    expect(extractTypeEtablissement("les colleges de Lyon")).toBe("college");
+  });
+
+  it("extrait lycee", () => {
+    expect(extractTypeEtablissement("lycee a Bordeaux")).toBe("lycee");
+    expect(extractTypeEtablissement("lycées de Toulouse")).toBe("lycee");
+  });
+
+  it("retourne null sans type explicite", () => {
+    expect(extractTypeEtablissement("etablissements a Lyon")).toBeNull();
+    expect(extractTypeEtablissement("scolarite a Paris")).toBeNull();
   });
 });

@@ -14,12 +14,14 @@ import { comparerCommunes } from "./tools/comparer-communes.js";
 import { simulerImpotRevenu } from "./tools/simuler-impot-revenu.js";
 import { rechercherConventionCollective } from "./tools/rechercher-convention-collective.js";
 import { rechercherEntreprise } from "./tools/rechercher-entreprise.js";
+import { rechercherEtablissementScolaire } from "./tools/rechercher-etablissement-scolaire.js";
+import { consulterResultatsLycee } from "./tools/consulter-resultats-lycee.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.2.2";
+const VERSION = "1.3.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -256,6 +258,39 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "rechercher_etablissement_scolaire",
+    description:
+      "Recherche un etablissement scolaire (ecole, college, lycee) par commune, code postal ou nom. Retourne les informations detaillees : adresse, contact, voies d'enseignement, services (restauration, internat, ULIS), sections (europeenne, sport, arts), education prioritaire. Source : Annuaire de l'education (data.education.gouv.fr), 68 000+ etablissements.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bondy')" },
+        code_postal: { type: "string", description: "Code postal (ex: '69001', '93140')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune" },
+        type: { type: "string", description: "Type d'etablissement : 'ecole', 'college', 'lycee', 'maternelle', 'elementaire', 'primaire', 'erea'" },
+        statut: { type: "string", enum: ["public", "prive"], description: "Statut : public ou prive" },
+        nom: { type: "string", description: "Nom de l'etablissement (recherche partielle, ex: 'Lacassagne')" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
+      },
+    },
+  },
+  {
+    name: "consulter_resultats_lycee",
+    description:
+      "Consulte les indicateurs de valeur ajoutee (IVAL) d'un lycee : taux de reussite au bac, valeur ajoutee, taux d'acces 2nde-bac, taux de mentions. Couvre les lycees generaux/technologiques et professionnels, publics et prives sous contrat. Donnees DEPP session 2012-2024. Source : data.education.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bordeaux')" },
+        code_postal: { type: "string", description: "Code postal (ex: '69001')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune" },
+        nom_lycee: { type: "string", description: "Nom du lycee (recherche partielle, ex: 'Lacassagne', 'Guimard')" },
+        type: { type: "string", enum: ["gt", "pro", "tous"], description: "Voie : 'gt' (general/techno), 'pro' (professionnel), 'tous' (defaut)" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
+      },
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -296,6 +331,10 @@ async function executeTool(
       return rechercherConventionCollective(args as { query?: string; idcc?: string; limit?: number });
     case "rechercher_entreprise":
       return rechercherEntreprise(args as { siret?: string; siren?: string; nom?: string });
+    case "rechercher_etablissement_scolaire":
+      return rechercherEtablissementScolaire(args as { commune?: string; code_postal?: string; code_insee?: string; type?: string; statut?: "public" | "prive"; nom?: string; limit?: number });
+    case "consulter_resultats_lycee":
+      return consulterResultatsLycee(args as { commune?: string; code_postal?: string; code_insee?: string; nom_lycee?: string; type?: "gt" | "pro" | "tous"; limit?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -348,6 +387,8 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Comparaison : comparer_communes (fiscalite + immobilier + services, 2-5 communes)",
           "   - Entreprises : rechercher_entreprise (SIRET/SIREN/nom + conventions collectives)",
           "   - Conventions : rechercher_convention_collective (IDCC ou mot-cle)",
+          "   - Education : rechercher_etablissement_scolaire (ecoles, colleges, lycees par commune)",
+          "   - Resultats lycees : consulter_resultats_lycee (IVAL — taux reussite, VA, mentions par lycee)",
           "",
           "PARAMETRES IMPORTANTS :",
           "- Les communes acceptent un nom, un code postal ou un code INSEE.",
