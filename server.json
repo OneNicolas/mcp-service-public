@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.OneNicolas/mcp-service-public",
+  "title": "Service Public France",
+  "description": "MCP server for French public services data. 15 tools: administrative guides (service-public.fr), local tax rates, property transactions (DVF), tax doctrine (BOFiP), ABC zoning (Pinel/PTZ), collective bargaining agreements (KALI), company lookup (SIRET/SIREN), and simulators (property tax, notary fees, income tax). Powered by Cloudflare Workers with real-time French government API access.",
+  "repository": {
+    "url": "https://github.com/OneNicolas/mcp-service-public",
+    "source": "github"
+  },
+  "version": "1.2.1",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp-service-public.nhaultcoeur.workers.dev/mcp"
+    }
+  ]
+}

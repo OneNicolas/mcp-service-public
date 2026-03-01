@@ -8,6 +8,7 @@ import { simulerFraisNotaire } from "./simuler-frais-notaire.js";
 import { consulterZonageImmobilier } from "./consulter-zonage-immobilier.js";
 import { simulerImpotRevenu } from "./simuler-impot-revenu.js";
 import { rechercherConventionCollective } from "./rechercher-convention-collective.js";
+import { rechercherEntreprise } from "./rechercher-entreprise.js";
 
 interface RechercherArgs {
   query: string;
@@ -23,7 +24,8 @@ export type QueryCategory =
   | "simulation_frais_notaire"
   | "zonage_immobilier"
   | "simulation_ir"
-  | "convention_collective";
+  | "convention_collective"
+  | "recherche_entreprise";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -157,6 +159,14 @@ export async function rechercher(
       return prefixResult(result, "📜 Convention collective");
     }
 
+    case "recherche_entreprise": {
+      const siret = extractSiret(query);
+      const siren = siret ? undefined : extractSiren(query);
+      const nom = (!siret && !siren) ? query.replace(/\b(entreprise|societe|convention|collective|siret|siren)\b/gi, "").trim() || query : undefined;
+      const result = await rechercherEntreprise({ siret: siret ?? undefined, siren: siren ?? undefined, nom });
+      return prefixResult(result, "\uD83C\uDFE2 Fiche entreprise");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -230,6 +240,17 @@ export function classifyQuery(query: string): QueryCategory {
   for (const pattern of dvfPatterns) {
     if (pattern.test(q)) return "transactions_dvf";
   }
+
+  // T32 -- Patterns recherche entreprise (SIRET/SIREN)
+  // Concatener les chiffres pour detecter SIRET avec espaces
+  const digitsOnly = query.replace(/[^\d]/g, "");
+  if (/^\d{14}$/.test(digitsOnly)) return "recherche_entreprise";
+  if (/\b\d{14}\b/.test(query)) return "recherche_entreprise";
+  if (/\b\d{9}\b/.test(query) && /\b(siren|entreprise|societe)\b/.test(q)) return "recherche_entreprise";
+  if (/\bsiret\b/.test(q)) return "recherche_entreprise";
+  if (/\bsiren\b/.test(q)) return "recherche_entreprise";
+  if (/\b(convention|idcc)\b.*\b(entreprise|societe)\b/.test(q)) return "recherche_entreprise";
+  if (/\b(entreprise|societe)\b.*\b(convention|idcc)\b/.test(q)) return "recherche_entreprise";
 
   // T28 -- Patterns convention collective
   const conventionPatterns = [
@@ -315,6 +336,7 @@ const STOP_UPPER = new Set([
   "TFB", "TFNB", "TEOM", "CFE", "TH", "TVA", "IR", "IS",
   "BOFIP", "REI", "DVF", "TF", "DMTO", "PTZ", "LLI", "ABC",
   "CEHR", "CSG", "CRDS", "PLM", "IDCC", "KALI", "HCR",
+  "SIRET", "SIREN",
 ]);
 
 /** Tente d'extraire un nom de commune de la requete */
@@ -500,6 +522,28 @@ export function extractIDCC(query: string): string | null {
   const match2 = query.match(/\bconvention\b.*\b(\d{4})\b/i);
   if (match2) return match2[1];
   return null;
+}
+
+/** Extrait un SIRET (14 chiffres) de la query */
+export function extractSiret(query: string): string | null {
+  // Concatener les groupes de chiffres separes par espaces/points
+  const digits = query.replace(/[^\d\s.]/g, " ").replace(/[\s.]+/g, "").trim();
+  // Chercher une sequence de 14 chiffres
+  const match = digits.match(/(\d{14})/);
+  return match ? match[1] : null;
+}
+
+/** Extrait un SIREN (9 chiffres) de la query */
+export function extractSiren(query: string): string | null {
+  // Concatener les groupes de chiffres separes par espaces/points
+  const digits = query.replace(/[^\d\s.]/g, " ").replace(/[\s.]+/g, "").trim();
+  // Chercher exactement 9 chiffres (pas 14 = SIRET)
+  const match = digits.match(/^(\d{9})$|(?:^|\D)(\d{9})(?:\D|$)/);
+  if (!match) return null;
+  const siren = match[1] || match[2];
+  // Exclure si c'est en fait un SIRET (14 chiffres)
+  if (digits.match(/\d{10,}/)) return null;
+  return siren ?? null;
 }
 
 /** Nettoie et parse un nombre au format FR ("250 000" ou "250.000" ou "250,000") */

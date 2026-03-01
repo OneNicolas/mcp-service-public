@@ -13,12 +13,13 @@ import { consulterZonageImmobilier } from "./tools/consulter-zonage-immobilier.j
 import { comparerCommunes } from "./tools/comparer-communes.js";
 import { simulerImpotRevenu } from "./tools/simuler-impot-revenu.js";
 import { rechercherConventionCollective } from "./tools/rechercher-convention-collective.js";
+import { rechercherEntreprise } from "./tools/rechercher-entreprise.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -241,6 +242,19 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "rechercher_entreprise",
+    description:
+      "Recherche une entreprise francaise par SIRET, SIREN ou nom. Retourne les informations legales (forme juridique, NAF, effectif, dirigeants, adresse) et la ou les convention(s) collective(s) applicable(s) avec detail KALI. Source : API Recherche d'entreprises (DINUM) + KALI (DILA).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        siret: { type: "string", description: "Numero SIRET (14 chiffres, ex: '41816609600069')" },
+        siren: { type: "string", description: "Numero SIREN (9 chiffres, ex: '418166096')" },
+        nom: { type: "string", description: "Nom ou raison sociale de l'entreprise (ex: 'OCTO Technology')" },
+      },
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -279,6 +293,8 @@ async function executeTool(
       return simulerImpotRevenu(args as { revenu_net_imposable: number; nb_parts?: number; situation?: "celibataire" | "marie" | "pacse" | "divorce" | "veuf"; nb_enfants?: number; revenus_fonciers?: number; regime_foncier?: "micro" | "reel"; revenus_capitaux?: number; regime_capitaux?: "pfu" | "bareme"; micro_bic?: number; micro_bnc?: number });
     case "rechercher_convention_collective":
       return rechercherConventionCollective(args as { query?: string; idcc?: string; limit?: number });
+    case "rechercher_entreprise":
+      return rechercherEntreprise(args as { siret?: string; siren?: string; nom?: string });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }

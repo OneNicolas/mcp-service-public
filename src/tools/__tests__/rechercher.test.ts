@@ -10,6 +10,8 @@ import {
   extractSituationFamiliale,
   extractNbEnfants,
   extractIDCC,
+  extractSiret,
+  extractSiren,
 } from "../rechercher.js";
 
 describe("classifyQuery", () => {
@@ -324,5 +326,56 @@ describe("extractIDCC", () => {
 
   it("retourne null sans IDCC", () => {
     expect(extractIDCC("convention collective batiment")).toBeNull();
+  });
+});
+
+// T32 -- Classification recherche entreprise
+describe("classifyQuery — recherche entreprise", () => {
+  it("detecte un SIRET 14 chiffres", () => {
+    expect(classifyQuery("41816609600069")).toBe("recherche_entreprise");
+  });
+
+  it("detecte un SIRET avec espaces", () => {
+    expect(classifyQuery("418 166 096 00069")).toBe("recherche_entreprise");
+  });
+
+  it("detecte mot-cle siret", () => {
+    expect(classifyQuery("SIRET de l'entreprise Acme")).toBe("recherche_entreprise");
+  });
+
+  it("detecte mot-cle siren", () => {
+    expect(classifyQuery("SIREN 418166096")).toBe("recherche_entreprise");
+  });
+
+  it("detecte convention + entreprise", () => {
+    expect(classifyQuery("convention collective de l'entreprise Acme")).toBe("recherche_entreprise");
+  });
+
+  it("ne confond pas un code postal avec un SIREN", () => {
+    expect(classifyQuery("taxe fonciere 75001")).not.toBe("recherche_entreprise");
+  });
+});
+
+describe("extractSiret", () => {
+  it("extrait un SIRET 14 chiffres", () => {
+    expect(extractSiret("SIRET 41816609600069")).toBe("41816609600069");
+  });
+
+  it("extrait un SIRET avec espaces", () => {
+    expect(extractSiret("418 166 096 00069")).toBe("41816609600069");
+  });
+
+  it("retourne null sans SIRET", () => {
+    expect(extractSiret("entreprise Acme")).toBeNull();
+  });
+});
+
+describe("extractSiren", () => {
+  it("extrait un SIREN 9 chiffres", () => {
+    expect(extractSiren("SIREN 418166096")).toBe("418166096");
+  });
+
+  it("retourne null sans SIREN", () => {
+    expect(extractSiren("entreprise Acme")).toBeNull();
   });
 });

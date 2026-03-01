@@ -1,18 +1,26 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.1-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Tools](https://img.shields.io/badge/MCP%20tools-15-blueviolet)
+![Tests](https://img.shields.io/badge/tests-187%20passing-brightgreen)
 
-Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
-## URL publique
+## Connexion rapide
 
 ```
 https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 ```
 
-## Les 14 outils MCP (v1.0.0)
+| Client | Configuration |
+|--------|-------------|
+| **Claude.ai** | Parametres > MCP > Ajouter URL ci-dessus (Streamable HTTP) |
+| **Claude Desktop** | `"command": "npx", "args": ["-y", "mcp-remote", "https://mcp-service-public.nhaultcoeur.workers.dev/mcp"]` |
+| **VS Code / Cursor** | `.vscode/mcp.json` avec URL ci-dessus |
+
+## Les 15 outils MCP (v1.2.1)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
@@ -28,8 +36,9 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 | 10 | `simuler_frais_notaire` | Bareme reglemente | DMTO + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | data.gouv.fr | Zone ABC (Pinel, PTZ, plafonds loyers/ressources) |
 | 12 | `comparer_communes` | REI + DVF + zonage | Tableau croise de 2 a 5 communes |
-| 13 | `simuler_impot_revenu` | Bareme IR 2025 | IR progressif, quotient familial, decote, CEHR |
+| 13 | `simuler_impot_revenu` | Bareme IR 2025 | IR progressif, quotient familial, decote, CEHR, revenus fonciers/capitaux/BIC/BNC |
 | 14 | `rechercher_convention_collective` | KALI / data.gouv.fr | Conventions collectives par IDCC ou mot-cle |
+| 15 | `rechercher_entreprise` | DINUM + KALI | Fiche entreprise par SIRET/SIREN/nom + conventions applicables |
 
 ## Exemples d'appels
 
@@ -38,7 +47,13 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 { "name": "rechercher", "arguments": { "query": "prix immobilier a Lyon" } }
 { "name": "rechercher", "arguments": { "query": "renouveler passeport" } }
 { "name": "rechercher", "arguments": { "query": "93140 taxe fonciere" } }
-{ "name": "rechercher", "arguments": { "query": "Bondy taxe fonciere" } }
+{ "name": "rechercher", "arguments": { "query": "SIRET 41816609600069" } }
+```
+
+### Recherche d'entreprise
+```json
+{ "name": "rechercher_entreprise", "arguments": { "siret": "41816609600069" } }
+{ "name": "rechercher_entreprise", "arguments": { "nom": "OCTO Technology" } }
 ```
 
 ### Simuler la taxe fonciere
@@ -55,6 +70,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 ```json
 { "name": "simuler_impot_revenu", "arguments": { "revenu_net_imposable": 42000 } }
 { "name": "simuler_impot_revenu", "arguments": { "revenu_net_imposable": 80000, "situation": "marie", "nb_enfants": 2 } }
+{ "name": "simuler_impot_revenu", "arguments": { "revenu_net_imposable": 50000, "revenus_fonciers": 12000, "regime_foncier": "micro" } }
 ```
 
 ### Conventions collectives
@@ -106,7 +122,7 @@ Frais = DMTO + Emoluments TTC + CSI + Debours
 ```
 
 - **DMTO** : 5,81 % (ancien, taux normal) ou 6,32 % (taux majore 2025) ; 0,71 % (neuf)
-- **Emoluments** : bareme degressif reglemente (3,87 % → 0,799 %) + TVA 20 %
+- **Emoluments** : bareme degressif reglemente (3,87 % -> 0,799 %) + TVA 20 %
 - **CSI** : 0,10 % du prix (minimum 15 EUR)
 - **Debours** : ~1 200 EUR (estimation)
 
@@ -120,59 +136,42 @@ IR net = IR brut - Decote (si applicable) + CEHR (si > 250k/500k)
 
 Bareme 2025 (revenus 2024) : 0 % / 11 % / 30 % / 41 % / 45 %
 
-## Utilisation
+Revenus complementaires supportes : fonciers (micro/reel), capitaux mobiliers (PFU/bareme), micro-BIC (50 %), micro-BNC (34 %).
 
-### Claude.ai (projet ou conversation)
+### Recherche d'entreprise
 
-Ajouter le serveur MCP dans les parametres :
-- URL : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- Transport : Streamable HTTP
-
-### Claude Desktop
-
-Dans `claude_desktop_config.json` :
-
-```json
-{
-  "mcpServers": {
-    "service-public": {
-      "command": "mcp-remote",
-      "args": ["https://mcp-service-public.nhaultcoeur.workers.dev/mcp"]
-    }
-  }
-}
-```
-
-> Necessite [mcp-remote](https://www.npmjs.com/package/mcp-remote) installe globalement.
+Recherche via l'API Recherche d'entreprises (DINUM) par SIRET, SIREN ou nom. Retourne forme juridique, NAF, effectif, dirigeants, adresse, et chaine vers KALI pour les conventions collectives applicables.
 
 ## Architecture
 
 ```
 Cloudflare Workers (plan payant)
-├── Transport : Streamable HTTP (POST /mcp)
-├── D1 SQLite (fiches DILA)
-│   ├── fiches (~5 500 fiches pratiques)
-│   ├── fiches_fts (index FTS5, tokenize unicode61)
-│   ├── themes (304 themes hierarchiques)
-│   ├── sync_log (historique des synchronisations)
-│   └── tool_stats (statistiques d'usage)
-├── Proxy API (temps reel, cache + retry)
-│   ├── data.economie.gouv.fr → REI fiscalite locale + BOFiP
-│   ├── data.gouv.fr → DVF transactions + Zonage ABC + KALI conventions
-│   ├── geo.api.gouv.fr → Resolution communes
-│   └── API Annuaire → services publics locaux
-└── Cron (0 6 * * *) → sync quotidienne DILA
++-- Transport : Streamable HTTP (POST /mcp)
++-- D1 SQLite (fiches DILA)
+|   +-- fiches (~5 500 fiches pratiques)
+|   +-- fiches_fts (index FTS5, tokenize unicode61)
+|   +-- themes (304 themes hierarchiques)
+|   +-- sync_log (historique des synchronisations)
+|   +-- tool_stats (statistiques d'usage)
++-- Proxy API (temps reel, cache + retry)
+|   +-- data.economie.gouv.fr -> REI fiscalite locale + BOFiP
+|   +-- data.gouv.fr -> DVF transactions + Zonage ABC + KALI conventions
+|   +-- geo.api.gouv.fr -> Resolution communes
+|   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
+|   +-- API Annuaire -> services publics locaux
++-- Cron (0 6 * * *) -> sync quotidienne DILA
 ```
 
 ### Sources de donnees
 
 | Source | Type | Donnees |
 |--------|------|---------|
-| DILA (lecomarquage) | ZIP quotidien → D1 | Fiches pratiques, themes |
+| DILA (lecomarquage) | ZIP quotidien -> D1 | Fiches pratiques, themes |
 | API Annuaire | Proxy temps reel | Services publics locaux |
 | data.economie.gouv.fr | Proxy temps reel | Fiscalite locale (REI), BOFiP doctrine |
 | data.gouv.fr | Proxy temps reel | DVF transactions, Zonage ABC, KALI conventions collectives |
 | geo.api.gouv.fr | Proxy temps reel | Resolution communes (CP/INSEE/nom) |
+| recherche-entreprises.api.gouv.fr | Proxy temps reel | Entreprises (SIRET/SIREN/nom, dirigeants, IDCC) |
 
 ### Endpoints
 
@@ -192,8 +191,8 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires
-npm run typecheck    # Verification TypeScript
+npx vitest run       # Tests unitaires (187 tests)
+npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```
 
@@ -204,7 +203,11 @@ npm run deploy       # Deploiement Cloudflare
 - Vitest (tests unitaires)
 - fflate (decompression ZIP)
 - fast-xml-parser (parsing XML DILA)
-- APIs : Annuaire, data.economie.gouv.fr, data.gouv.fr, geo.api.gouv.fr
+- APIs : Annuaire, data.economie.gouv.fr, data.gouv.fr, geo.api.gouv.fr, recherche-entreprises.api.gouv.fr
+
+## Licence
+
+MIT
 
 ## Contribution
 
@@ -213,4 +216,4 @@ npm run deploy       # Deploiement Cloudflare
 3. Suivre le pattern : 1 fichier = 1 outil dans `src/tools/`
 4. Ajouter l'import + definition + case dans `src/index.ts`
 5. Ecrire les tests dans `src/tools/__tests__/`
-6. Push sur `main` → auto-deploy
+6. Push sur `main` -> auto-deploy

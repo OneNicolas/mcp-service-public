@@ -52,6 +52,11 @@ function createFetchMock() {
       return mockFetchResponse({ total_count: 0, results: [] });
     }
 
+    // API Recherche entreprises
+    if (url.includes("recherche-entreprises.api.gouv.fr")) {
+      return mockFetchResponse({ results: [], total_results: 0 });
+    }
+
     // geo.api.gouv.fr (resolution communes)
     if (url.includes("geo.api.gouv.fr")) {
       if (url.includes("code=")) {
@@ -229,6 +234,20 @@ describe("rechercher() — dispatch integration", () => {
     const result = await rechercher({ query: "IDCC 843" }, env);
     const text = getResultText(result);
     expect(text).toContain("Convention collective");
+  });
+
+  // --- Recherche entreprise ---
+
+  it("dispatche vers recherche entreprise avec SIRET", async () => {
+    const result = await rechercher({ query: "41816609600069" }, env);
+    const text = getResultText(result);
+    expect(text).not.toContain("Fiches pratiques");
+  });
+
+  it("dispatche vers recherche entreprise avec mot-cle SIRET", async () => {
+    const result = await rechercher({ query: "SIRET de OCTO Technology" }, env);
+    const text = getResultText(result);
+    expect(text).not.toContain("Fiches pratiques");
   });
 
   // --- Parametres limit ---
