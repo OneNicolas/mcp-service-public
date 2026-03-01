@@ -1,10 +1,10 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.2.1-blue)
+![Version](https://img.shields.io/badge/version-1.2.2-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Tools](https://img.shields.io/badge/MCP%20tools-15-blueviolet)
-![Tests](https://img.shields.io/badge/tests-187%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-210%20passing-brightgreen)
 
 Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
@@ -20,7 +20,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 | **Claude Desktop** | `"command": "npx", "args": ["-y", "mcp-remote", "https://mcp-service-public.nhaultcoeur.workers.dev/mcp"]` |
 | **VS Code / Cursor** | `.vscode/mcp.json` avec URL ci-dessus |
 
-## Les 15 outils MCP (v1.2.1)
+## Les 15 outils MCP (v1.2.2)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
@@ -31,7 +31,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 | 5 | `naviguer_themes` | DILA / service-public.fr | Navigation dans l'arborescence thematique |
 | 6 | `consulter_fiscalite_locale` | DGFiP REI | Taux d'imposition locale par commune (TFB, TEOM, CFE...) |
 | 7 | `rechercher_doctrine_fiscale` | BOFiP | 8 983 articles de doctrine fiscale en vigueur |
-| 8 | `consulter_transactions_immobilieres` | DVF / data.gouv.fr | Prix medians, prix/m2, repartition par type de bien |
+| 8 | `consulter_transactions_immobilieres` | DVF / data.gouv.fr | Prix medians, prix/m2, repartition par type de bien, evolution multi-annees |
 | 9 | `simuler_taxe_fonciere` | REI + DVF | Estimation TF = VLC estimee x 50 % x taux REI reel |
 | 10 | `simuler_frais_notaire` | Bareme reglemente | DMTO + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | data.gouv.fr | Zone ABC (Pinel, PTZ, plafonds loyers/ressources) |
@@ -98,6 +98,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 ### Transactions immobilieres (DVF)
 ```json
 { "name": "consulter_transactions_immobilieres", "arguments": { "commune": "Bondy", "type_local": "Appartement" } }
+{ "name": "consulter_transactions_immobilieres", "arguments": { "commune": "Lyon", "evolution": true } }
 ```
 
 ## Comment ca marche
@@ -191,7 +192,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (187 tests)
+npx vitest run       # Tests unitaires (210 tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```
