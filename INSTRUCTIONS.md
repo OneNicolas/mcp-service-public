@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.0.0
+- **Version actuelle** : v1.2.2
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -39,12 +39,14 @@ src/
 │   ├── comparer-communes.ts               # Tableau croise multi-communes (REI + DVF + zonage + services)
 │   ├── simuler-impot-revenu.ts            # Bareme progressif IR 2025, QF, decote, CEHR
 │   ├── rechercher-convention-collective.ts # Conventions collectives KALI via data.gouv.fr
+│   ├── rechercher-entreprise.ts            # Recherche entreprise SIRET/SIREN/nom + enrichissement KALI
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
 │       ├── rechercher-fiche.test.ts
 │       ├── simuler-frais-notaire.test.ts
-│       └── simuler-impot-revenu.test.ts
+│       ├── simuler-impot-revenu.test.ts
+│       └── rechercher-entreprise.test.ts
 ├── utils/
 │   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
 │   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune
@@ -65,11 +67,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 14 outils actuels (v1.0.0)
+## Les 15 outils actuels (v1.2.2)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR) |
+| 1 | `rechercher` | Dispatch unifie (10 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -83,6 +85,7 @@ src/
 | 12 | `comparer_communes` | Tableau croise REI + DVF + zonage + services publics (2-5 communes) |
 | 13 | `simuler_impot_revenu` | Bareme progressif IR 2025, quotient familial, decote, CEHR |
 | 14 | `rechercher_convention_collective` | Conventions collectives KALI (IDCC, mot-cle, lien Legifrance) |
+| 15 | `rechercher_entreprise` | Recherche entreprise SIRET/SIREN/nom + conventions collectives KALI |
 
 ## Historique des sprints
 
@@ -122,6 +125,20 @@ src/
 | T25 | Nouveau tool `rechercher_convention_collective` (KALI via data.gouv.fr) |
 | T26 | cachedFetch : timeout 10s, retry 1x sur 5xx/timeout, FetchError |
 | T27 | Mise a jour INSTRUCTIONS.md et README.md pour v1.0 |
+
+### Sprint 9 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T32 | Nouveau tool `rechercher_entreprise` (SIRET/SIREN/nom via API DINUM + enrichissement KALI) |
+| T33 | Publication registre MCP (server.json, GitHub Actions, registry.modelcontextprotocol.io) |
+
+### Sprint 10 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T34 | Server Instructions MCP (champ `instructions` dans `initialize`) |
+| T35 | Evolution prix DVF multi-annees (parametre `evolution: true`, 2019-aujourd'hui) |
+| T36 | Mise a jour schema registre MCP vers 2025-12-11 |
+| T37 | Tests robustesse dispatch (edge cases ambigus, fautes de frappe, requetes mixtes) |
 
 ## Contraintes techniques
 

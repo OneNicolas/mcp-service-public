@@ -19,7 +19,7 @@ import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOl
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.2.1";
+const VERSION = "1.2.2";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -132,7 +132,7 @@ const TOOLS = [
   {
     name: "consulter_transactions_immobilieres",
     description:
-      "Consulte les transactions immobilières (DVF - Demandes de Valeurs Foncières) d'une commune. Fournit prix médians, prix au m², répartition par type de bien et nombre de pièces. Données DGFiP via data.gouv.fr. Hors Alsace, Moselle et Mayotte.",
+      "Consulte les transactions immobilières (DVF - Demandes de Valeurs Foncières) d'une commune. Fournit prix médians, prix au m², répartition par type de bien et nombre de pièces. Avec evolution=true, retourne l'historique des prix médians par année (2019-aujourd'hui) avec tendance. Données DGFiP via data.gouv.fr. Hors Alsace, Moselle et Mayotte.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -141,6 +141,7 @@ const TOOLS = [
         code_postal: { type: "string", description: "Code postal (ex: '93140'). Résout automatiquement vers le(s) code(s) INSEE." },
         type_local: { type: "string", enum: ["Appartement", "Maison", "Local industriel. commercial ou assimilé"], description: "Filtrer par type de bien" },
         annee: { type: "number", description: "Filtrer sur une année spécifique (ex: 2024). Par défaut : 2 dernières années." },
+        evolution: { type: "boolean", description: "Si true, retourne l'évolution des prix médians année par année (2019-aujourd'hui) avec tendance hausse/baisse/stable. Ignore le paramètre annee." },
       },
     },
   },
@@ -280,7 +281,7 @@ async function executeTool(
     case "rechercher_doctrine_fiscale":
       return rechercherDoctrineFiscale(args as { query: string; serie?: string; limit?: number });
     case "consulter_transactions_immobilieres":
-      return consulterTransactionsImmobilieres(args as { commune?: string; code_insee?: string; code_postal?: string; type_local?: string; annee?: number });
+      return consulterTransactionsImmobilieres(args as { commune?: string; code_insee?: string; code_postal?: string; type_local?: string; annee?: number; evolution?: boolean });
     case "simuler_taxe_fonciere":
       return simulerTaxeFonciere(args as { commune?: string; code_insee?: string; code_postal?: string; surface: number; type_bien: "Maison" | "Appartement"; nombre_pieces?: number; annee_construction?: number; residence_principale?: boolean });
     case "simuler_frais_notaire":
@@ -330,6 +331,33 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
         protocolVersion: "2025-03-26",
         capabilities: { tools: {} },
         serverInfo: { name: "service-public", version: VERSION },
+        instructions: [
+          "Serveur MCP pour les donnees publiques francaises (service-public.fr, DGFiP, DVF, BOFiP, KALI, DINUM).",
+          "",
+          "WORKFLOW RECOMMANDE :",
+          "1. Commencer par l'outil `rechercher` avec une question en langage naturel.",
+          "   Il dispatche automatiquement vers l'outil le plus adapte.",
+          "2. Utiliser les outils specifiques directement si la categorie est connue :",
+          "   - Demarches/droits : rechercher_fiche, lire_fiche, naviguer_themes",
+          "   - Services locaux : rechercher_service_local",
+          "   - Fiscalite locale : consulter_fiscalite_locale (taux TFB/TEOM/CFE par commune)",
+          "   - Doctrine fiscale : rechercher_doctrine_fiscale (BOFiP — IR, TVA, IS, plus-values)",
+          "   - Immobilier : consulter_transactions_immobilieres (prix DVF par commune, evolution=true pour historique 2019+)",
+          "   - Simulateurs : simuler_taxe_fonciere, simuler_frais_notaire, simuler_impot_revenu",
+          "   - Zonage : consulter_zonage_immobilier (zones ABC — Pinel, PTZ)",
+          "   - Comparaison : comparer_communes (fiscalite + immobilier + services, 2-5 communes)",
+          "   - Entreprises : rechercher_entreprise (SIRET/SIREN/nom + conventions collectives)",
+          "   - Conventions : rechercher_convention_collective (IDCC ou mot-cle)",
+          "",
+          "PARAMETRES IMPORTANTS :",
+          "- Les communes acceptent un nom, un code postal ou un code INSEE.",
+          "- Paris/Lyon/Marseille sont geres automatiquement (arrondissements DVF).",
+          "- Sans annee/exercice, les outils retournent l'evolution multi-annees.",
+          "",
+          "LIMITES :",
+          "- DVF exclut l'Alsace, la Moselle et Mayotte.",
+          "- Les simulateurs (TF, IR, frais notaire) sont indicatifs, pas des avis fiscaux.",
+        ].join("\n"),
       });
 
     case "notifications/initialized":

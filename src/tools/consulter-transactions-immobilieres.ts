@@ -20,6 +20,7 @@ interface ConsulterTransactionsArgs {
   code_postal?: string;
   type_local?: string;
   annee?: number;
+  evolution?: boolean;
 }
 
 interface DvfRecord {
@@ -45,11 +46,11 @@ interface MutationAgg {
   pieces: number;
 }
 
-/** Consulte les transactions immobilières (DVF) via data.gouv.fr */
+/** Consulte les transactions immobili\u00e8res (DVF) via data.gouv.fr */
 export async function consulterTransactionsImmobilieres(
   args: ConsulterTransactionsArgs,
 ): Promise<ToolResult> {
-  const { commune, code_insee, code_postal, type_local, annee } = args;
+  const { commune, code_insee, code_postal, type_local, annee, evolution } = args;
 
   if (!commune && !code_insee && !code_postal) {
     return {
@@ -63,17 +64,21 @@ export async function consulterTransactionsImmobilieres(
 
     if (!codeInseeList.length) {
       return {
-        content: [{ type: "text", text: "Aucune commune trouvée pour les critères fournis." }],
+        content: [{ type: "text", text: "Aucune commune trouv\u00e9e pour les crit\u00e8res fournis." }],
         isError: true,
       };
     }
 
-    // Détecte si c'est une ville PLM
+    // T35 -- Mode evolution multi-annees
+    if (evolution) {
+      return fetchEvolution(codeInseeList, type_local);
+    }
+
+    // Mode standard (existant)
     const isPLM = codeInseeList.some((c) => PLM_ARRONDISSEMENTS[c]);
     const expandedCodes = expandPLM(codeInseeList);
     const maxPages = isPLM ? MAX_PAGES_PLM : MAX_PAGES_NORMAL;
 
-    // Période : 2 dernières années par défaut ou année spécifique
     const dateMin = annee
       ? `${annee}-01-01`
       : `${new Date().getFullYear() - 2}-01-01`;
@@ -84,7 +89,6 @@ export async function consulterTransactionsImmobilieres(
     const plmLabel = getPLMLabel(codeInseeList);
     const errors: string[] = [];
 
-    // Pour PLM, traiter par batch de 3 arrondissements
     if (isPLM) {
       const batchSize = 3;
       for (let i = 0; i < expandedCodes.length; i += batchSize) {
@@ -116,18 +120,18 @@ export async function consulterTransactionsImmobilieres(
 
     if (!allMutations.length) {
       const typeNote = type_local ? ` de type "${type_local}"` : "";
-      const periodNote = annee ? ` en ${annee}` : " sur les 2 dernières années";
+      const periodNote = annee ? ` en ${annee}` : " sur les 2 derni\u00e8res ann\u00e9es";
       return {
         content: [{
           type: "text",
-          text: `Aucune transaction${typeNote} trouvée${periodNote} pour ${communeLabels.join(", ")}.\n\n⚠️ Les données DVF excluent l'Alsace, la Moselle et Mayotte.`,
+          text: `Aucune transaction${typeNote} trouv\u00e9e${periodNote} pour ${communeLabels.join(", ")}.\n\n\u26a0\ufe0f Les donn\u00e9es DVF excluent l'Alsace, la Moselle et Mayotte.`,
         }],
       };
     }
 
     let report = buildReport(allMutations, communeLabels, type_local, annee);
     if (errors.length > 0) {
-      report += `\n\n⚠️ ${errors.length} arrondissement(s) n'ont pas pu être interrogés (données partielles).`;
+      report += `\n\n\u26a0\ufe0f ${errors.length} arrondissement(s) n'ont pas pu \u00eatre interrog\u00e9s (donn\u00e9es partielles).`;
     }
     return { content: [{ type: "text", text: report }] };
   } catch (error) {
@@ -138,7 +142,159 @@ export async function consulterTransactionsImmobilieres(
   }
 }
 
-// --- Résolution des codes INSEE ---
+// --- T35 : Mode evolution multi-annees ---
+
+const EVOLUTION_YEARS_START = 2019;
+const EVOLUTION_MAX_PAGES = 5; // par annee, limiter les appels API
+
+interface YearStats {
+  annee: number;
+  nb_transactions: number;
+  prix_median: number;
+  prix_median_m2: number | null;
+}
+
+/** Collecte les stats DVF annee par annee et calcule la tendance */
+async function fetchEvolution(
+  codeInseeList: string[],
+  typeLocal?: string,
+): Promise<ToolResult> {
+  const isPLM = codeInseeList.some((c) => PLM_ARRONDISSEMENTS[c]);
+  const expandedCodes = expandPLM(codeInseeList);
+  const maxPages = isPLM ? Math.min(MAX_PAGES_PLM, EVOLUTION_MAX_PAGES) : EVOLUTION_MAX_PAGES;
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from(
+    { length: currentYear - EVOLUTION_YEARS_START + 1 },
+    (_, i) => EVOLUTION_YEARS_START + i,
+  );
+
+  const communeLabels: string[] = [];
+  const plmLabel = getPLMLabel(codeInseeList);
+  const yearStats: YearStats[] = [];
+
+  // Traiter annee par annee sequentiellement
+  for (const year of years) {
+    const dateMin = `${year}-01-01`;
+    const dateMax = `${year}-12-31`;
+    const allMutations: MutationAgg[] = [];
+
+    if (isPLM) {
+      const batchSize = 3;
+      for (let i = 0; i < expandedCodes.length; i += batchSize) {
+        const batch = expandedCodes.slice(i, i + batchSize);
+        const results = await Promise.allSettled(
+          batch.map((code) => fetchDvfForCommune(code, typeLocal, dateMin, dateMax, maxPages)),
+        );
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            allMutations.push(...r.value.mutations);
+            if (communeLabels.length === 0 && r.value.communeNom) {
+              communeLabels.push(r.value.communeNom);
+            }
+          }
+        }
+      }
+    } else {
+      for (const code of expandedCodes) {
+        try {
+          const { mutations, communeNom } = await fetchDvfForCommune(
+            code, typeLocal, dateMin, dateMax, maxPages,
+          );
+          allMutations.push(...mutations);
+          const label = `${communeNom} (${code})`;
+          if (!communeLabels.includes(label)) communeLabels.push(label);
+        } catch { /* annee sans donnees, continuer */ }
+      }
+    }
+
+    if (plmLabel && !communeLabels.includes(plmLabel)) {
+      communeLabels.push(plmLabel);
+    }
+
+    if (allMutations.length === 0) continue;
+
+    const clean = filterOutliers(allMutations);
+    const prices = clean.map((m) => m.prix).sort((a, b) => a - b);
+    const withSurface = clean.filter((m) => m.surface > 0);
+    const prixM2 = withSurface.length >= 3
+      ? median(withSurface.map((m) => m.prix / m.surface).sort((a, b) => a - b))
+      : null;
+
+    yearStats.push({
+      annee: year,
+      nb_transactions: clean.length,
+      prix_median: median(prices),
+      prix_median_m2: prixM2,
+    });
+  }
+
+  if (!yearStats.length) {
+    const typeNote = typeLocal ? ` de type "${typeLocal}"` : "";
+    return {
+      content: [{
+        type: "text",
+        text: `Aucune transaction${typeNote} trouv\u00e9e pour ${communeLabels.join(", ") || "la commune"} entre ${EVOLUTION_YEARS_START} et ${currentYear}.\n\n\u26a0\ufe0f Les donn\u00e9es DVF excluent l'Alsace, la Moselle et Mayotte.`,
+      }],
+    };
+  }
+
+  const report = buildEvolutionReport(yearStats, communeLabels, typeLocal);
+  return { content: [{ type: "text", text: report }] };
+}
+
+/** Construit le rapport d'evolution multi-annees */
+function buildEvolutionReport(
+  stats: YearStats[],
+  communeLabels: string[],
+  typeLocal?: string,
+): string {
+  const lines: string[] = [];
+  const typeLabel = typeLocal ?? "Tous biens";
+
+  lines.push(`\ud83d\udcc8 \u00c9volution des prix immobiliers \u2014 ${communeLabels.join(", ")}`);
+  lines.push(`   Type : ${typeLabel} | P\u00e9riode : ${stats[0].annee}\u2013${stats[stats.length - 1].annee}`);
+  lines.push(`   Source : DVF (DGFiP) via data.gouv.fr`);
+  lines.push("");
+
+  const hasM2 = stats.some((s) => s.prix_median_m2 !== null);
+  if (hasM2) {
+    lines.push("  Ann\u00e9e  | Transactions | Prix m\u00e9dian     | Prix m\u00e9dian/m\u00b2");
+    lines.push("  -------|-------------|----------------|----------------");
+    for (const s of stats) {
+      const m2 = s.prix_median_m2 !== null ? formatEuro(s.prix_median_m2) + "/m\u00b2" : "n/a";
+      lines.push(`  ${s.annee}   | ${String(s.nb_transactions).padStart(11)} | ${formatEuro(s.prix_median).padStart(14)} | ${m2}`);
+    }
+  } else {
+    lines.push("  Ann\u00e9e  | Transactions | Prix m\u00e9dian");
+    lines.push("  -------|-------------|---------------");
+    for (const s of stats) {
+      lines.push(`  ${s.annee}   | ${String(s.nb_transactions).padStart(11)} | ${formatEuro(s.prix_median)}`);
+    }
+  }
+  lines.push("");
+
+  if (stats.length >= 2) {
+    const first = stats[0];
+    const last = stats[stats.length - 1];
+    const variation = ((last.prix_median - first.prix_median) / first.prix_median) * 100;
+    const trend = variation > 5 ? "\ud83d\udcc8 Hausse" : variation < -5 ? "\ud83d\udcc9 Baisse" : "\u27a1\ufe0f Stable";
+    lines.push(`  Tendance ${first.annee}\u2013${last.annee} : ${trend} (${variation >= 0 ? "+" : ""}${variation.toFixed(1)} %)`);
+
+    if (hasM2 && first.prix_median_m2 !== null && last.prix_median_m2 !== null) {
+      const varM2 = ((last.prix_median_m2 - first.prix_median_m2) / first.prix_median_m2) * 100;
+      lines.push(`  Prix/m\u00b2 : ${formatEuro(first.prix_median_m2)} \u2192 ${formatEuro(last.prix_median_m2)} (${varM2 >= 0 ? "+" : ""}${varM2.toFixed(1)} %)`);
+    }
+    lines.push("");
+  }
+
+  lines.push("\u26a0\ufe0f Donn\u00e9es DVF (DGFiP) \u2014 hors Alsace, Moselle et Mayotte.");
+  lines.push("   \u00c9chantillon limit\u00e9 par ann\u00e9e. Indicatif uniquement.");
+
+  return lines.join("\n");
+}
+
+// --- R\u00e9solution des codes INSEE ---
 
 async function resolveInseeList(
   commune?: string,
@@ -206,12 +362,10 @@ async function fetchDvfForCommune(
   if (dateMin) params.set("date_mutation__greater", dateMin);
   if (dateMax) params.set("date_mutation__less", dateMax);
 
-  // Première page
   const firstPage = await fetchPage(params);
   let allRecords = firstPage.data ?? [];
   const communeNom = allRecords[0]?.nom_commune ?? codeInsee;
 
-  // Pages supplémentaires séquentiellement (évite surcharge API)
   if (allRecords.length === MAX_PAGE_SIZE) {
     for (let p = 2; p <= maxPages; p++) {
       const nextParams = new URLSearchParams(params);
@@ -227,12 +381,11 @@ async function fetchDvfForCommune(
     }
   }
 
-  // Déduplication par id_mutation : garder la ligne avec la plus grande surface
   const seen = new Map<string, MutationAgg>();
   for (const rec of allRecords) {
     const id = rec.id_mutation;
     if (!id || !rec.valeur_fonciere || rec.valeur_fonciere <= 0) continue;
-    if (!rec.type_local || rec.type_local === "Dépendance") continue;
+    if (!rec.type_local || rec.type_local === "D\u00e9pendance") continue;
 
     if (seen.has(id)) {
       const existing = seen.get(id)!;
@@ -279,17 +432,17 @@ function buildReport(
   annee?: number,
 ): string {
   const lines: string[] = [];
-  const period = annee ? `${annee}` : `${new Date().getFullYear() - 2}–${new Date().getFullYear()}`;
+  const period = annee ? `${annee}` : `${new Date().getFullYear() - 2}\u2013${new Date().getFullYear()}`;
 
-  lines.push(`📊 Transactions immobilières — ${communeLabels.join(", ")}`);
-  lines.push(`   Période : ${period} | Source : DVF (DGFiP) via data.gouv.fr`);
+  lines.push(`\ud83d\udcca Transactions immobili\u00e8res \u2014 ${communeLabels.join(", ")}`);
+  lines.push(`   P\u00e9riode : ${period} | Source : DVF (DGFiP) via data.gouv.fr`);
   lines.push("");
 
   const byType = groupBy(mutations, (m) => m.type);
   const types = Object.keys(byType).sort();
 
   if (!typeLocalFilter && types.length > 1) {
-    lines.push("── Répartition par type ──");
+    lines.push("\u2500\u2500 R\u00e9partition par type \u2500\u2500");
     for (const type of types) {
       lines.push(`  ${type} : ${byType[type].length} transactions`);
     }
@@ -301,42 +454,41 @@ function buildReport(
     const items = byType[type] ?? [];
     if (!items.length) continue;
 
-    // Filtrer les outliers de prix (IQR × 3)
     const cleanItems = filterOutliers(items);
     const outlierCount = items.length - cleanItems.length;
 
-    lines.push(`── ${type} (${cleanItems.length} transactions${outlierCount > 0 ? `, ${outlierCount} exclues` : ""}) ──`);
+    lines.push(`\u2500\u2500 ${type} (${cleanItems.length} transactions${outlierCount > 0 ? `, ${outlierCount} exclues` : ""}) \u2500\u2500`);
 
     const prices = cleanItems.map((m) => m.prix).sort((a, b) => a - b);
     lines.push(`  Prix de vente :`);
-    lines.push(`    Médian : ${formatEuro(median(prices))}`);
-    lines.push(`    Fourchette : ${formatEuro(prices[0])} – ${formatEuro(prices[prices.length - 1])}`);
+    lines.push(`    M\u00e9dian : ${formatEuro(median(prices))}`);
+    lines.push(`    Fourchette : ${formatEuro(prices[0])} \u2013 ${formatEuro(prices[prices.length - 1])}`);
 
     const withSurface = cleanItems.filter((m) => m.surface > 0);
     if (withSurface.length >= 3) {
       const prixM2 = withSurface.map((m) => m.prix / m.surface).sort((a, b) => a - b);
       const q1 = prixM2[Math.floor(prixM2.length * 0.25)];
       const q3 = prixM2[Math.floor(prixM2.length * 0.75)];
-      lines.push(`  Prix au m² :`);
-      lines.push(`    Médian : ${formatEuro(median(prixM2))}/m²`);
-      lines.push(`    Q1–Q3 : ${formatEuro(q1)} – ${formatEuro(q3)}/m²`);
+      lines.push(`  Prix au m\u00b2 :`);
+      lines.push(`    M\u00e9dian : ${formatEuro(median(prixM2))}/m\u00b2`);
+      lines.push(`    Q1\u2013Q3 : ${formatEuro(q1)} \u2013 ${formatEuro(q3)}/m\u00b2`);
 
       const surfaces = withSurface.map((m) => m.surface).sort((a, b) => a - b);
-      lines.push(`  Surface médiane : ${median(surfaces).toFixed(0)} m²`);
+      lines.push(`  Surface m\u00e9diane : ${median(surfaces).toFixed(0)} m\u00b2`);
     }
 
     if (["Appartement", "Maison"].includes(type)) {
       const byPieces = groupBy(
         cleanItems.filter((m) => m.pieces > 0),
-        (m) => `${m.pieces} pièce${m.pieces > 1 ? "s" : ""}`,
+        (m) => `${m.pieces} pi\u00e8ce${m.pieces > 1 ? "s" : ""}`,
       );
       const piecesKeys = Object.keys(byPieces).sort();
       if (piecesKeys.length > 1) {
-        lines.push(`  Par nombre de pièces :`);
+        lines.push(`  Par nombre de pi\u00e8ces :`);
         for (const pk of piecesKeys) {
           const group = byPieces[pk];
           const pm2s = group.filter((m) => m.surface > 0).map((m) => m.prix / m.surface);
-          const pm2Info = pm2s.length ? ` — ${formatEuro(median(pm2s.sort((a, b) => a - b)))}/m²` : "";
+          const pm2Info = pm2s.length ? ` \u2014 ${formatEuro(median(pm2s.sort((a, b) => a - b)))}/m\u00b2` : "";
           lines.push(`    ${pk} : ${group.length} ventes${pm2Info}`);
         }
       }
@@ -345,7 +497,7 @@ function buildReport(
     lines.push("");
   }
 
-  lines.push("⚠️ Données DVF (DGFiP) — hors Alsace, Moselle et Mayotte.");
+  lines.push("\u26a0\ufe0f Donn\u00e9es DVF (DGFiP) \u2014 hors Alsace, Moselle et Mayotte.");
   lines.push("   Les prix incluent tous les lots de la mutation. Indicatif uniquement.");
 
   return lines.join("\n");
@@ -353,7 +505,7 @@ function buildReport(
 
 // --- Utilitaires ---
 
-/** Filtre les outliers via IQR × 3 sur les prix */
+/** Filtre les outliers via IQR \u00d7 3 sur les prix */
 function filterOutliers(items: MutationAgg[]): MutationAgg[] {
   if (items.length < 10) return items;
   const prices = items.map((m) => m.prix).sort((a, b) => a - b);

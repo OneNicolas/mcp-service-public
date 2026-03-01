@@ -379,3 +379,107 @@ describe("extractSiren", () => {
     expect(extractSiren("entreprise Acme")).toBeNull();
   });
 });
+
+// T37 -- Edge cases : requetes ambigues
+describe("classifyQuery — edge cases ambigus", () => {
+  it("priorise SIRET quand convention + SIRET coexistent", () => {
+    expect(classifyQuery("convention collective entreprise SIRET 41816609600069")).toBe("recherche_entreprise");
+  });
+
+  it("priorise entreprise quand SIRET 14 chiffres avec espaces + convention", () => {
+    expect(classifyQuery("convention 418 166 096 00069")).toBe("recherche_entreprise");
+  });
+
+  it("route convention collective sans SIRET ni entreprise", () => {
+    expect(classifyQuery("convention collective du batiment")).toBe("convention_collective");
+  });
+
+  it("route fiscalite meme avec un mot immobilier ambigu", () => {
+    expect(classifyQuery("taxe fonciere a Lyon")).toBe("fiscalite_locale");
+  });
+
+  it("route DVF quand prix immobilier explicite", () => {
+    expect(classifyQuery("prix immobilier a Lyon")).toBe("transactions_dvf");
+  });
+
+  it("route simulation TF avant fiscalite quand surface mentionnee", () => {
+    expect(classifyQuery("combien de taxe fonciere pour 60m2 a Lyon")).toBe("simulation_tf");
+  });
+
+  it("route zonage avant DVF quand Pinel mentionne", () => {
+    expect(classifyQuery("zone Pinel prix immobilier Lyon")).toBe("zonage_immobilier");
+  });
+
+  it("route frais notaire avant DVF meme avec mot immobilier", () => {
+    expect(classifyQuery("frais de notaire achat immobilier 250000")).toBe("simulation_frais_notaire");
+  });
+});
+
+// T37 -- Edge cases : requetes courtes ou vagues
+describe("classifyQuery — requetes courtes", () => {
+  it("route un seul mot fiscal vers BOFiP", () => {
+    expect(classifyQuery("TVA")).toBe("doctrine_bofip");
+  });
+
+  it("route une requete tres courte vers fiches par defaut", () => {
+    expect(classifyQuery("bonjour")).toBe("fiches_dila");
+  });
+
+  it("route un seul mot administratif vers fiches", () => {
+    expect(classifyQuery("passeport")).toBe("fiches_dila");
+  });
+
+  it("route IDCC seul comme convention collective", () => {
+    expect(classifyQuery("IDCC")).toBe("convention_collective");
+  });
+});
+
+// T37 -- Edge cases : requetes avec fautes de frappe
+describe("classifyQuery — tolerance fautes de frappe", () => {
+  it("reconnait taxe fonciere avec accent", () => {
+    expect(classifyQuery("taxe fonci\u00e8re \u00e0 Marseille")).toBe("fiscalite_locale");
+  });
+
+  it("reconnait convention sans accent", () => {
+    expect(classifyQuery("convention collective metallurgie")).toBe("convention_collective");
+  });
+
+  it("reconnait simuler avec typo er/ez", () => {
+    expect(classifyQuery("simuler impot sur le revenu")).toBe("simulation_ir");
+  });
+
+  it("reconnait SIRET en minuscules", () => {
+    expect(classifyQuery("siret de l'entreprise Acme")).toBe("recherche_entreprise");
+  });
+
+  it("reconnait frais notaire en majuscules", () => {
+    expect(classifyQuery("FRAIS DE NOTAIRE 300000")).toBe("simulation_frais_notaire");
+  });
+});
+
+// T37 -- Edge cases : requetes mixtes multi-domaines
+describe("classifyQuery — requetes mixtes", () => {
+  it("priorise simulation TF quand taxe fonciere + combien + surface", () => {
+    expect(classifyQuery("combien de taxe fonciere pour une maison de 120m2 a Nantes")).toBe("simulation_tf");
+  });
+
+  it("route vers DVF quand acheter + maison + commune", () => {
+    expect(classifyQuery("acheter une maison a Rennes")).toBe("transactions_dvf");
+  });
+
+  it("ne confond pas code postal avec SIRET", () => {
+    expect(classifyQuery("taxe fonciere 93140")).toBe("fiscalite_locale");
+  });
+
+  it("ne confond pas un prix avec un code postal", () => {
+    expect(classifyQuery("frais notaire 250000 euros ancien")).toBe("simulation_frais_notaire");
+  });
+
+  it("route vers fiches quand aucun pattern specifique", () => {
+    expect(classifyQuery("comment inscrire mon enfant a l'ecole")).toBe("fiches_dila");
+  });
+
+  it("route IR avec situation familiale complete", () => {
+    expect(classifyQuery("combien d'impot sur le revenu pour 50000 euros marie 2 enfants")).toBe("simulation_ir");
+  });
+});
