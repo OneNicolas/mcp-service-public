@@ -69,7 +69,7 @@ interface AnnuaireRecord {
 
 interface ExploreResponse {
   total_count: number;
-  results: Array<{ additional_properties: AnnuaireRecord }>;
+  results: AnnuaireRecord[];
 }
 
 export async function rechercherEtablissementScolaire(
@@ -148,7 +148,7 @@ export async function rechercherEtablissementScolaire(
       };
     }
 
-    const formatted = data.results.map((r) => formatEtablissement(r.additional_properties));
+    const formatted = data.results.map((r) => formatEtablissement(r));
     const locationLabel = location ? ` a ${location.nom}` : "";
 
     return {

@@ -88,7 +88,9 @@ async function fetchZonage(codeInsee: string): Promise<string | null> {
       if (!data.data?.length) continue;
 
       const row = data.data[0];
-      const zone = row["Zone"] ?? row["zone"] ?? row["ZONE"] ?? row["Zone_ABC"] ?? row["zone_abc"] ?? row["Zonage"] ?? row["zonage"];
+      // Chercher la colonne zone parmi les variantes connues (le nom change selon les mises a jour du dataset)
+      const zone = row["Zone"] ?? row["zone"] ?? row["ZONE"] ?? row["Zone_ABC"] ?? row["zone_abc"] ?? row["Zonage"] ?? row["zonage"]
+        ?? Object.entries(row).find(([k]) => /^zonage/i.test(k))?.[1];
       if (zone && typeof zone === "string") return normalizeZone(zone);
     } catch {
       continue;

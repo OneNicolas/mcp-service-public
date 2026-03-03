@@ -255,7 +255,7 @@ export async function fetchEducationStats(communeName: string): Promise<Educatio
     if (!response.ok) return null;
 
     const data = (await response.json()) as {
-      results: Array<{ additional_properties?: { type_etablissement?: string; nb?: number } }>;
+      results: Array<{ type_etablissement?: string; nb?: number }>;
     };
 
     if (!data.results?.length) return null;
@@ -269,7 +269,7 @@ export async function fetchEducationStats(communeName: string): Promise<Educatio
 // Extrait ecoles/colleges/lycees depuis la reponse groupee de l'API Education
 // Retourne null si aucun resultat ou aucun type scolaire connu
 export function parseEducationResults(
-  results: Array<{ additional_properties?: { type_etablissement?: string; nb?: number } }>,
+  results: Array<{ type_etablissement?: string; nb?: number }>,
 ): EducationStats | null {
   if (!results || results.length === 0) return null;
 
@@ -279,8 +279,8 @@ export function parseEducationResults(
   let found = false;
 
   for (const r of results) {
-    const type = r.additional_properties?.type_etablissement;
-    const nb = r.additional_properties?.nb ?? 0;
+    const type = r.type_etablissement;
+    const nb = r.nb ?? 0;
     if (type === "Ecole") { ecoles = nb; found = true; }
     else if (type === "Coll\u00e8ge") { colleges = nb; found = true; }
     else if (type === "Lyc\u00e9e") { lycees = nb; found = true; }
@@ -409,13 +409,13 @@ export async function fetchCollegesDistrict(communeName: string): Promise<Colleg
     if (!response.ok) return null;
 
     const data = (await response.json()) as {
-      results: Array<{ additional_properties?: { code_rne?: string } }>;
+      results: Array<{ code_rne?: string }>;
     };
 
     if (!data.results?.length) return null;
 
     const rnes = data.results
-      .map((r) => r.additional_properties?.code_rne)
+      .map((r) => r.code_rne)
       .filter((rne): rne is string => !!rne);
 
     if (rnes.length === 0) return null;
@@ -433,11 +433,11 @@ export async function fetchCollegesDistrict(communeName: string): Promise<Colleg
     const nameMap = new Map<string, string>();
     if (annuaireResp.ok) {
       const annuaireData = (await annuaireResp.json()) as {
-        results: Array<{ additional_properties?: { identifiant_de_l_etablissement?: string; nom_etablissement?: string } }>;
+        results: Array<{ identifiant_de_l_etablissement?: string; nom_etablissement?: string }>;
       };
       for (const r of annuaireData.results ?? []) {
-        const id = r.additional_properties?.identifiant_de_l_etablissement;
-        const nom = r.additional_properties?.nom_etablissement;
+        const id = r.identifiant_de_l_etablissement;
+        const nom = r.nom_etablissement;
         if (id && nom) nameMap.set(id, nom);
       }
     }
@@ -471,16 +471,15 @@ async function fetchSanteForCompare(codeDept: string): Promise<SanteData | null>
     let densiteSpec: number | null = null;
 
     if (demoResp.ok) {
-      const demoData = (await demoResp.json()) as { results: Array<{ additional_properties?: Record<string, unknown> }> };
+      const demoData = (await demoResp.json()) as { results: Array<Record<string, unknown>> };
       const specDensites: number[] = [];
       // Garder uniquement la derniere annee (tri DESC deja fait)
       const seenProfessions = new Set<string>();
       for (const r of demoData.results ?? []) {
-        const p = r.additional_properties;
-        const prof = String(p?.profession_sante ?? "");
+        const prof = String(r.profession_sante ?? "");
         if (seenProfessions.has(prof)) continue;
         seenProfessions.add(prof);
-        const d = Number(p?.densite ?? 0);
+        const d = Number(r.densite ?? 0);
         if (d <= 0) continue;
         const profLower = prof.toLowerCase();
         if (profLower.includes("generaliste")) {
@@ -505,9 +504,9 @@ async function fetchSanteForCompare(codeDept: string): Promise<SanteData | null>
     let patienteleMT: number | null = null;
     const mtResp = await cachedFetch(`${AMELI_API}/${DS_PATIENTELE}/records?${mtParams}`, { ttl: CACHE_TTL.ANNUAIRE });
     if (mtResp.ok) {
-      const mtData = (await mtResp.json()) as { results: Array<{ additional_properties?: Record<string, unknown> }> };
+      const mtData = (await mtResp.json()) as { results: Array<Record<string, unknown>> };
       if (mtData.results?.length) {
-        patienteleMT = Number(mtData.results[0].additional_properties?.patientele_mt_moyenne ?? 0) || null;
+        patienteleMT = Number(mtData.results[0].patientele_mt_moyenne ?? 0) || null;
       }
     }
 
