@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.7.0
+- **Version actuelle** : v1.8.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -14,7 +14,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - TypeScript, Cloudflare Workers (Streamable HTTP MCP)
 - D1 SQLite (FTS5) pour les fiches DILA (~5 500 fiches, sync cron quotidien)
-- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), data.education.gouv.fr (Annuaire, IVAL, Evaluations nationales, InserJeunes), data.ameli.fr (soins), geo.api.gouv.fr, annuaire API
+- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI, SSMSI securite), data.education.gouv.fr (Annuaire, IVAL, Evaluations nationales, InserJeunes), data.ameli.fr (soins), georisques.gouv.fr (risques naturels, CatNat), geo.api.gouv.fr, annuaire API
 - Vitest pour les tests unitaires
 - Pas de framework MCP SDK — implementation JSON-RPC directe
 
@@ -25,7 +25,7 @@ src/
 ├── index.ts              # Router MCP + tool definitions + dispatcher (VERSION ici)
 ├── types.ts              # Env, ToolResult, Fiche...
 ├── tools/                # 1 fichier = 1 outil, export async function
-│   ├── rechercher.ts                       # Dispatch unifie intelligent (16 categories : fiches, fiscalite, doctrine, DVF, TF, frais notaire, zonage, IR, conventions, entreprises, education, IVAL, evaluations, parcoursup, acces soins, insertion pro)
+│   ├── rechercher.ts                       # Dispatch unifie intelligent (18 categories : fiches, fiscalite, doctrine, DVF, TF, frais notaire, zonage, IR, conventions, entreprises, education, IVAL, evaluations, parcoursup, acces soins, insertion pro, securite, risques naturels)
 │   ├── rechercher-fiche.ts                 # FTS sur D1 (sanitizer + fallback LIKE + snippets)
 │   ├── lire-fiche.ts                       # Lecture fiche par ID
 │   ├── rechercher-service-local.ts         # Proxy annuaire
@@ -46,6 +46,8 @@ src/
 │   ├── consulter-parcoursup.ts             # Formations Parcoursup (14 000+ formations, selectivite, profil admis)
 │   ├── consulter-acces-soins.ts            # Acces aux soins (data.ameli.fr, effectifs/densite medecins, patientele MT)
 │   ├── consulter-insertion-professionnelle.ts  # Insertion pro InserJeunes (taux emploi, poursuite etudes lycees pro)
+│   ├── consulter-securite.ts               # Securite/delinquance departementale (SSMSI via data.gouv.fr Tabular)
+│   ├── consulter-risques-naturels.ts       # Risques naturels et technologiques + CatNat (Georisques API v1)
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -60,7 +62,9 @@ src/
 │       ├── rechercher-integration.test.ts
 │       ├── comparer-communes-education.test.ts
 │       ├── consulter-acces-soins.test.ts
-│       └── consulter-insertion-professionnelle.test.ts
+│       ├── consulter-insertion-professionnelle.test.ts
+│       ├── consulter-securite.test.ts
+│       └── consulter-risques-naturels.test.ts
 ├── utils/
 │   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
 │   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune, resolveCodeInsee
@@ -81,11 +85,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 21 outils actuels (v1.7.0)
+## Les 23 outils actuels (v1.8.0)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (16 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup, acces soins, insertion pro) |
+| 1 | `rechercher` | Dispatch unifie (18 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup, acces soins, insertion pro, securite, risques naturels) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -106,6 +110,8 @@ src/
 | 19 | `consulter_parcoursup` | Formations Parcoursup par mot-cle, ville, departement, filiere (14 000+ formations, selectivite, profil admis) |
 | 20 | `consulter_acces_soins` | Acces aux soins par departement : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees (data.ameli.fr) |
 | 21 | `consulter_insertion_professionnelle` | Insertion pro InserJeunes : taux emploi 6/12/24 mois, poursuite etudes, VA, detail par formation CAP/BacPro/BTS (data.education.gouv.fr) |
+| 22 | `consulter_securite` | Statistiques securite/delinquance departementales : 18 indicateurs SSMSI, taux pour 1000 hab., evolution annuelle (data.gouv.fr Tabular API) |
+| 23 | `consulter_risques_naturels` | Risques naturels et technologiques par commune + arretes CatNat (API Georisques BRGM/MTE) |
 
 ## Historique des sprints
 
@@ -193,6 +199,15 @@ src/
 | T49 | Enrichir `comparer_communes` avec donnees sante departementales (densite MG, specialistes, patientele MT via data.ameli.fr) |
 | T50 | Categories `acces_soins` et `insertion_pro` dans le dispatch `rechercher.ts` (16 categories) |
 | T51 | Tests dispatch + fix regex pluriels + fix types TS (326 tests, 0 erreurs TS) |
+
+### Sprint 15 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T52 | CI/CD : workflow GitHub Actions typecheck + vitest sur push/PR main |
+| T53 | Nouveau tool `consulter_securite` (18 indicateurs SSMSI departementaux via data.gouv.fr Tabular API) |
+| T54 | Nouveau tool `consulter_risques_naturels` (risques GASPAR + arretes CatNat via API Georisques v1) |
+| T55 | Categories `securite` et `risques_naturels` dans le dispatch `rechercher.ts` (18 categories) |
+| T56 | Enrichir `comparer_communes` avec securite departementale + risques naturels |
 
 ## Contraintes techniques
 

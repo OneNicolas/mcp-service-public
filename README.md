@@ -1,12 +1,12 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.7.0-blue)
+![Version](https://img.shields.io/badge/version-1.8.0-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-21-blueviolet)
-![Tests](https://img.shields.io/badge/tests-320%2B%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-23-blueviolet)
+![Tests](https://img.shields.io/badge/tests-350%2B%20passing-brightgreen)
 
-Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
 ## Installation
 
@@ -22,7 +22,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 2. Section **Integrations** > **MCP**
 3. Cliquer **Ajouter une integration**
 4. Coller l'URL ci-dessus
-5. Les 21 outils apparaissent automatiquement
+5. Les 23 outils apparaissent automatiquement
 
 ### Claude Desktop
 
@@ -71,13 +71,13 @@ Apres connexion, testez avec une requete simple :
 Recherche : renouveler passeport
 ```
 
-Si les 19 outils sont charges, le serveur est pret.
+Si les 23 outils sont charges, le serveur est pret.
 
-## Les 19 outils MCP (v1.5.0)
+## Les 23 outils MCP (v1.8.0)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
-| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (14 categories) |
+| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (18 categories) |
 | 2 | `rechercher_fiche` | DILA / service-public.fr | Recherche plein texte dans ~5 500 fiches pratiques |
 | 3 | `lire_fiche` | DILA / service-public.fr | Lecture complete d'une fiche par identifiant (F14929, N360...) |
 | 4 | `rechercher_service_local` | API Annuaire | Services publics locaux (mairie, prefecture, CAF...) |
@@ -88,7 +88,7 @@ Si les 19 outils sont charges, le serveur est pret.
 | 9 | `simuler_taxe_fonciere` | REI + DVF | Estimation TF = VLC estimee x 50 % x taux REI reel |
 | 10 | `simuler_frais_notaire` | Bareme reglemente | DMTO + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | data.gouv.fr | Zone ABC (Pinel, PTZ, plafonds loyers/ressources) |
-| 12 | `comparer_communes` | REI + DVF + zonage + Education | Tableau croise de 2 a 5 communes (population, fiscalite, immobilier, education, scores 6eme, services) |
+| 12 | `comparer_communes` | REI + DVF + zonage + Education + SSMSI + Georisques | Tableau croise de 2 a 5 communes (population, fiscalite, immobilier, education, sante, securite, risques naturels) |
 | 13 | `simuler_impot_revenu` | Bareme IR 2025 | IR progressif, quotient familial, decote, CEHR, revenus fonciers/capitaux/BIC/BNC |
 | 14 | `rechercher_convention_collective` | KALI / data.gouv.fr | Conventions collectives par IDCC ou mot-cle |
 | 15 | `rechercher_entreprise` | DINUM + KALI | Fiche entreprise par SIRET/SIREN/nom + conventions applicables |
@@ -96,6 +96,10 @@ Si les 19 outils sont charges, le serveur est pret.
 | 17 | `consulter_resultats_lycee` | DEPP / IVAL | Taux reussite bac, valeur ajoutee, acces 2nde-bac, mentions |
 | 18 | `consulter_evaluations_nationales` | DEPP / data.education.gouv.fr | Scores 6eme + CE2 par departement, IPS, groupes de niveau, tendance |
 | 19 | `consulter_parcoursup` | MESR / data.education.gouv.fr | Formations Parcoursup par mot-cle, ville, departement, filiere (14 000+ formations, selectivite, profil admis) |
+| 20 | `consulter_acces_soins` | CNAM / data.ameli.fr | Acces aux soins par departement : effectifs/densite medecins, patientele MT, zones sous-dotees |
+| 21 | `consulter_insertion_professionnelle` | DEPP-DARES / data.education.gouv.fr | Insertion pro InserJeunes : taux emploi 6/12/24 mois, poursuite etudes, VA par formation |
+| 22 | `consulter_securite` | SSMSI / data.gouv.fr | Statistiques securite/delinquance departementales : cambriolages, vols, violences, taux/1000 hab. |
+| 23 | `consulter_risques_naturels` | BRGM-MTE / georisques.gouv.fr | Risques naturels et technologiques par commune + arretes CatNat |
 
 ## Exemples d'appels
 
@@ -174,6 +178,18 @@ Si les 19 outils sont charges, le serveur est pret.
 { "name": "consulter_insertion_professionnelle", "arguments": { "ville": "Lyon", "limit": 5 } }
 { "name": "consulter_insertion_professionnelle", "arguments": { "uai": "0691723Y" } }
 { "name": "consulter_insertion_professionnelle", "arguments": { "recherche": "coiffure", "code_departement": "69" } }
+```
+
+### Securite et delinquance
+```json
+{ "name": "consulter_securite", "arguments": { "code_departement": "75" } }
+{ "name": "consulter_securite", "arguments": { "commune": "Lyon" } }
+```
+
+### Risques naturels
+```json
+{ "name": "consulter_risques_naturels", "arguments": { "commune": "Nimes" } }
+{ "name": "consulter_risques_naturels", "arguments": { "code_insee": "75056" } }
 ```
 
 ### Consulter le zonage ABC
@@ -263,6 +279,7 @@ Cloudflare Workers (plan payant)
 |   +-- data.economie.gouv.fr -> REI fiscalite locale + BOFiP
 |   +-- data.gouv.fr -> DVF transactions + Zonage ABC + KALI conventions
 |   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees + Evaluations nationales + Parcoursup + InserJeunes
+|   +-- georisques.gouv.fr -> Risques naturels GASPAR + Arretes CatNat
 |   +-- data.ameli.fr -> Acces aux soins (effectifs, densite, patientele MT)
 |   +-- geo.api.gouv.fr -> Resolution communes
 |   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
@@ -277,10 +294,11 @@ Cloudflare Workers (plan payant)
 | DILA (lecomarquage) | ZIP quotidien -> D1 | Fiches pratiques, themes |
 | API Annuaire | Proxy temps reel | Services publics locaux |
 | data.economie.gouv.fr | Proxy temps reel | Fiscalite locale (REI), BOFiP doctrine |
-| data.gouv.fr | Proxy temps reel | DVF transactions, Zonage ABC, KALI conventions collectives |
+| data.gouv.fr | Proxy temps reel | DVF transactions, Zonage ABC, KALI conventions collectives, SSMSI securite/delinquance |
 | geo.api.gouv.fr | Proxy temps reel | Resolution communes (CP/INSEE/nom) |
 | recherche-entreprises.api.gouv.fr | Proxy temps reel | Entreprises (SIRET/SIREN/nom, dirigeants, IDCC) |
 | data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees, evaluations nationales 6eme/CE2, formations Parcoursup, insertion pro InserJeunes |
+| georisques.gouv.fr | Proxy temps reel (API v1 GASPAR) | Risques naturels et technologiques par commune, arretes de catastrophe naturelle (CatNat) |
 | data.ameli.fr | Proxy temps reel | Acces aux soins : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees |
 
 ### Endpoints

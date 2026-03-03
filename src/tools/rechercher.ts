@@ -15,6 +15,8 @@ import { consulterEvaluationsNationales } from "./consulter-evaluations-national
 import { consulterParcoursup } from "./consulter-parcoursup.js";
 import { consulterAccesSoins } from "./consulter-acces-soins.js";
 import { consulterInsertionProfessionnelle } from "./consulter-insertion-professionnelle.js";
+import { consulterSecurite } from "./consulter-securite.js";
+import { consulterRisquesNaturels } from "./consulter-risques-naturels.js";
 
 interface RechercherArgs {
   query: string;
@@ -37,7 +39,9 @@ export type QueryCategory =
   | "evaluations_nationales"
   | "parcoursup"
   | "acces_soins"
-  | "insertion_pro";
+  | "insertion_pro"
+  | "securite"
+  | "risques_naturels";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -256,6 +260,23 @@ export async function rechercher(
       return prefixResult(insertionResult, "\uD83D\uDCBC Insertion professionnelle (InserJeunes)");
     }
 
+    case "securite": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const codeDept = extractCodeDepartement(query);
+      const loc = codeDept ? { code_departement: codeDept } : communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
+      const securiteResult = await consulterSecurite(loc);
+      return prefixResult(securiteResult, "\uD83D\uDEE1\uFE0F Securite (SSMSI)");
+    }
+
+    case "risques_naturels": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const loc = communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
+      const risquesResult = await consulterRisquesNaturels(loc);
+      return prefixResult(risquesResult, "\u26A0\uFE0F Risques naturels (Georisques)");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -374,6 +395,31 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of accesSoinsPatterns) {
     if (pattern.test(q)) return "acces_soins";
+  }
+
+  // T53 -- Patterns securite/delinquance
+  const securitePatterns = [
+    /\b(delinquance|criminalite|securite|insecurite)\b/,
+    /\b(cambriolage|vol|agression|violence)s?\b.*\b(commune|ville|departement|quartier)\b/,
+    /\btaux\b.*\b(criminalite|delinquance|vol|cambriolage)s?\b/,
+    /\b(homicide|meurtre|crime)s?\b.*\b(statistiques?|chiffres?|nombre|taux)\b/,
+  ];
+
+  for (const pattern of securitePatterns) {
+    if (pattern.test(q)) return "securite";
+  }
+
+  // T54 -- Patterns risques naturels
+  const risquesNaturelsPatterns = [
+    /\b(risques?)\b.*\b(naturels?|technologiques?|inondation|sism|seisme)\b/,
+    /\bcatnat\b/,
+    /\bcatastrophe\b.*\bnaturelles?\b/,
+    /\b(georisques?|zone\s+inondable|argile|retrait.gonflement)\b/,
+    /\b(inondation|seisme|mouvement.de.terrain|feu.de.foret)\b.*\b(risque|zone|commune)\b/,
+  ];
+
+  for (const pattern of risquesNaturelsPatterns) {
+    if (pattern.test(q)) return "risques_naturels";
   }
 
   // T48 -- Patterns insertion professionnelle (avant Parcoursup et education general)

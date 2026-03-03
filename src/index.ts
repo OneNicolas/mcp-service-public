@@ -20,12 +20,14 @@ import { consulterEvaluationsNationales } from "./tools/consulter-evaluations-na
 import { consulterParcoursup } from "./tools/consulter-parcoursup.js";
 import { consulterAccesSoins } from "./tools/consulter-acces-soins.js";
 import { consulterInsertionProfessionnelle } from "./tools/consulter-insertion-professionnelle.js";
+import { consulterSecurite } from "./tools/consulter-securite.js";
+import { consulterRisquesNaturels } from "./tools/consulter-risques-naturels.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.7.0";
+const VERSION = "1.8.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -36,7 +38,7 @@ const TOOLS = [
   {
     name: "rechercher",
     description:
-      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), transactions immobilières DVF, simulation de taxe foncière, simulation de frais de notaire, zonage immobilier ABC (Pinel, PTZ), simulation d'impôt sur le revenu, ou conventions collectives. À utiliser en premier si la source appropriée n'est pas évidente.",
+      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), transactions immobilières DVF, simulation de taxe foncière, simulation de frais de notaire, zonage immobilier ABC (Pinel, PTZ), simulation d'impôt sur le revenu, conventions collectives, sécurité/délinquance, ou risques naturels. À utiliser en premier si la source appropriée n'est pas évidente.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -200,7 +202,7 @@ const TOOLS = [
   {
     name: "comparer_communes",
     description:
-      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : population et densit\u00e9, fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...), \u00e9tablissements scolaires (\u00e9coles, coll\u00e8ges, lyc\u00e9es), donn\u00e9es sant\u00e9 d\u00e9partementales (densit\u00e9 m\u00e9decins, patient\u00e8le MT) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
+      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : population et densit\u00e9, fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, services publics locaux, \u00e9tablissements scolaires, scores 6\u00e8me, s\u00e9curit\u00e9 d\u00e9partementale (cambriolages, vols, violences), risques naturels (nombre de risques, arr\u00eat\u00e9s CatNat), donn\u00e9es sant\u00e9 (densit\u00e9 m\u00e9decins) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -356,6 +358,33 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "consulter_securite",
+    description:
+      "Consulte les statistiques de securite et delinquance par departement : cambriolages, vols, violences, homicides, escroqueries, stupefiants. Fournit le nombre de faits, le taux pour 1000 habitants et l'evolution annuelle. Accepte un nom de commune, un code postal ou un code departement. Source : SSMSI, Ministere de l'Interieur via data.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        code_departement: { type: "string", description: "Code departement (ex: '75', '93', '2A')" },
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon') — resout le departement automatiquement" },
+        code_postal: { type: "string", description: "Code postal (ex: '93140') — resout le departement automatiquement" },
+        annee: { type: "number", description: "Annee specifique (optionnel, defaut: derniere disponible)" },
+      },
+    },
+  },
+  {
+    name: "consulter_risques_naturels",
+    description:
+      "Consulte les risques naturels et technologiques d'une commune : inondation, seisme, mouvement de terrain, risque industriel, feu de foret, etc. Liste les risques identifies et les arretes de catastrophe naturelle (CatNat) avec dates. Accepte un nom de commune, un code postal ou un code INSEE. Source : Georisques (BRGM/MTE) via georisques.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Nimes', 'Vaison-la-Romaine')" },
+        code_postal: { type: "string", description: "Code postal (ex: '30000')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune (ex: '30189'). Prioritaire si fourni." },
+      },
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -408,6 +437,10 @@ async function executeTool(
       return consulterAccesSoins(args as { commune?: string; code_postal?: string; code_departement?: string });
     case "consulter_insertion_professionnelle":
       return consulterInsertionProfessionnelle(args as { recherche?: string; uai?: string; ville?: string; code_departement?: string; type_diplome?: string; limit?: number });
+    case "consulter_securite":
+      return consulterSecurite(args as { code_departement?: string; commune?: string; code_postal?: string; annee?: number });
+    case "consulter_risques_naturels":
+      return consulterRisquesNaturels(args as { commune?: string; code_postal?: string; code_insee?: string });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -457,7 +490,7 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Immobilier : consulter_transactions_immobilieres (prix DVF par commune, evolution=true pour historique 2019+)",
           "   - Simulateurs : simuler_taxe_fonciere, simuler_frais_notaire, simuler_impot_revenu",
           "   - Zonage : consulter_zonage_immobilier (zones ABC — Pinel, PTZ)",
-          "   - Comparaison : comparer_communes (fiscalite + immobilier + services, 2-5 communes)",
+          "   - Comparaison : comparer_communes (fiscalite + immobilier + services + securite + risques, 2-5 communes)",
           "   - Entreprises : rechercher_entreprise (SIRET/SIREN/nom + conventions collectives)",
           "   - Conventions : rechercher_convention_collective (IDCC ou mot-cle)",
           "   - Education : rechercher_etablissement_scolaire (ecoles, colleges, lycees par commune)",
@@ -465,6 +498,8 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Parcoursup : consulter_parcoursup (formations, selectivite, profil admis par ville/filiere)",
           "   - Acces soins : consulter_acces_soins (densite medecins, patientele MT, zones sous-dotees par departement)",
           "   - Insertion pro : consulter_insertion_professionnelle (InserJeunes — taux emploi/poursuite etudes apres CAP/Bac Pro/BTS)",
+          "   - Securite : consulter_securite (delinquance departementale — cambriolages, vols, violences, taux/1000 hab.)",
+          "   - Risques : consulter_risques_naturels (risques naturels/technologiques + arretes CatNat par commune)",
           "",
           "PARAMETRES IMPORTANTS :",
           "- Les communes acceptent un nom, un code postal ou un code INSEE.",
