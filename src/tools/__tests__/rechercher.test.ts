@@ -619,3 +619,43 @@ describe("classifyQuery — insertion_pro", () => {
     expect(classifyQuery("lycees a Lyon")).toBe("etablissement_scolaire");
   });
 });
+
+// T55 -- securite dispatch
+describe("classifyQuery -- securite", () => {
+  it("route les requetes securite/delinquance", () => {
+    expect(classifyQuery("delinquance a Lyon")).toBe("securite");
+    expect(classifyQuery("criminalite departement 93")).toBe("securite");
+    expect(classifyQuery("securite a Marseille")).toBe("securite");
+    expect(classifyQuery("insecurite Paris")).toBe("securite");
+  });
+
+  it("route les requetes avec indicateurs specifiques", () => {
+    expect(classifyQuery("cambriolages par commune a Lyon")).toBe("securite");
+    expect(classifyQuery("taux de delinquance departement 93")).toBe("securite");
+    expect(classifyQuery("homicides statistiques departement 75")).toBe("securite");
+  });
+});
+
+// T55 -- risques naturels dispatch
+describe("classifyQuery -- risques_naturels", () => {
+  it("route les requetes risques naturels", () => {
+    expect(classifyQuery("risques naturels a Nimes")).toBe("risques_naturels");
+    expect(classifyQuery("risques technologiques commune Rouen")).toBe("risques_naturels");
+  });
+
+  it("route les requetes CatNat", () => {
+    expect(classifyQuery("arretes catastrophe naturelle Paris")).toBe("risques_naturels");
+    expect(classifyQuery("catnat commune de Nimes")).toBe("risques_naturels");
+  });
+
+  it("route les risques specifiques", () => {
+    expect(classifyQuery("zone inondable commune de Vaison-la-Romaine")).toBe("risques_naturels");
+    expect(classifyQuery("georisques Lyon")).toBe("risques_naturels");
+    expect(classifyQuery("retrait-gonflement argile")).toBe("risques_naturels");
+  });
+
+  it("ne confond pas avec d'autres categories", () => {
+    expect(classifyQuery("securite a Paris")).toBe("securite");
+    expect(classifyQuery("prix immobilier a Nimes")).toBe("transactions_dvf");
+  });
+});

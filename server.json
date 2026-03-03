@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.OneNicolas/mcp-service-public",
   "title": "Service Public France",
-  "description": "French public services: tax, property, admin guides, education, healthcare, simulators",
-  "version": "1.7.0",
+  "description": "French public services: tax, property, admin, education, healthcare, security, risks",
+  "version": "1.8.0",
   "repository": {
     "url": "https://github.com/OneNicolas/mcp-service-public",
     "source": "github"

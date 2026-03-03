@@ -1,6 +1,8 @@
 import type { ToolResult } from "../types.js";
 import { resolveNomCommune, resolveCodePostal, resolveCodeInsee } from "../utils/geo-api.js";
 import { fetch6emeScores, extractDeptFromInsee } from "./consulter-evaluations-nationales.js";
+import { fetchSecuriteData } from "./consulter-securite.js";
+import { fetchRisques, fetchCatNat } from "./consulter-risques-naturels.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 const REI_API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets";
@@ -44,6 +46,18 @@ interface SanteData {
   patienteleMT: number | null;
 }
 
+interface SecuriteCompareData {
+  cambriolages: number | null;
+  volsSansViolence: number | null;
+  violencesPhysiques: number | null;
+  tauxCambriolages: number | null;
+}
+
+interface RisquesCompareData {
+  nbRisques: number;
+  nbCatNat: number;
+}
+
 interface CommuneData {
   nom: string;
   code: string;
@@ -62,6 +76,8 @@ interface CommuneData {
   scores6eme: Scores6emeData | null;
   collegesDistrict: CollegeDistrict[] | null;
   sante: SanteData | null;
+  securite: SecuriteCompareData | null;
+  risques: RisquesCompareData | null;
 }
 
 export async function comparerCommunes(args: ComparerCommunesArgs): Promise<ToolResult> {
@@ -137,7 +153,7 @@ async function resolveInput(input: string): Promise<{ nom: string; code: string 
 async function fetchCommuneData(nom: string, code: string): Promise<CommuneData> {
   const codeDept = extractDeptFromInsee(code);
 
-  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult, santeResult] = await Promise.allSettled([
+  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult, santeResult, securiteResult, risquesResult] = await Promise.allSettled([
     fetchREI(code),
     fetchDvfMedianPrixM2(code, "Appartement"),
     fetchDvfMedianPrixM2(code, "Maison"),
@@ -148,6 +164,8 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     fetchScoresForCompare(codeDept),
     fetchCollegesDistrict(nom),
     fetchSanteForCompare(codeDept),
+    fetchSecuriteForCompare(codeDept),
+    fetchRisquesForCompare(code),
   ]);
 
   const rei = reiResult.status === "fulfilled" ? reiResult.value : null;
@@ -160,6 +178,8 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
   const scores6eme = scores6emeResult.status === "fulfilled" ? scores6emeResult.value : null;
   const collegesDistrict = collegesResult.status === "fulfilled" ? collegesResult.value : null;
   const sante = santeResult.status === "fulfilled" ? santeResult.value : null;
+  const securite = securiteResult.status === "fulfilled" ? securiteResult.value : null;
+  const risques = risquesResult.status === "fulfilled" ? risquesResult.value : null;
 
   // Densite = population / (surface en hectares / 100) = hab/km2
   const population = geo?.population ?? null;
@@ -182,6 +202,8 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     scores6eme,
     collegesDistrict,
     sante,
+    securite,
+    risques,
   };
 }
 
@@ -496,6 +518,57 @@ async function fetchSanteForCompare(codeDept: string): Promise<SanteData | null>
   }
 }
 
+// T56 -- Recupere les indicateurs de securite cles pour le departement
+async function fetchSecuriteForCompare(codeDept: string): Promise<SecuriteCompareData | null> {
+  try {
+    const rows = await fetchSecuriteData(codeDept);
+    if (rows.length === 0) return null;
+
+    // Prendre la derniere annee disponible
+    const latestYear = Math.max(...rows.map((r) => r.annee));
+    const latestRows = rows.filter((r) => r.annee === latestYear);
+
+    const find = (keyword: string) => latestRows.find((r) => r.indicateur.toLowerCase().includes(keyword));
+    const camb = find("cambriolage");
+    const vols = find("vols sans violence");
+    const violences = find("violences physiques intrafamiliales") ?? find("violences physiques");
+
+    return {
+      cambriolages: camb?.nombre ?? null,
+      volsSansViolence: vols?.nombre ?? null,
+      violencesPhysiques: violences?.nombre ?? null,
+      tauxCambriolages: camb?.taux_pour_mille ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// T56 -- Recupere le nombre de risques et arretes CatNat pour une commune
+async function fetchRisquesForCompare(codeInsee: string): Promise<RisquesCompareData | null> {
+  try {
+    const [risquesItems, catnatItems] = await Promise.all([
+      fetchRisques(codeInsee),
+      fetchCatNat(codeInsee),
+    ]);
+
+    // Compter les risques uniques
+    const risquesSet = new Set<string>();
+    for (const item of risquesItems) {
+      for (const detail of item.risques_detail ?? []) {
+        if (detail.num_risque) risquesSet.add(detail.num_risque);
+      }
+    }
+
+    return {
+      nbRisques: risquesSet.size,
+      nbCatNat: catnatItems.length,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const lines: string[] = [];
   const nbCommunes = data.length;
@@ -534,6 +607,13 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   lines.push(`| \u{1FA7A} Densite MG (dept, /100k) | ${data.map((d) => d.sante?.densiteMG ? String(d.sante.densiteMG) : "N/A").join(" | ")} |`);
   lines.push(`| \u{1FA7A} Densite specialistes (dept) | ${data.map((d) => d.sante?.densiteSpecialistes ? String(d.sante.densiteSpecialistes) : "N/A").join(" | ")} |`);
   lines.push(`| \u{1FA7A} Patientele MT moy. (dept) | ${data.map((d) => d.sante?.patienteleMT ? String(Math.round(d.sante.patienteleMT)) : "N/A").join(" | ")} |`);
+  // T56 -- Lignes securite departementale
+  lines.push(`| \uD83D\uDEE1\uFE0F Cambriolages (dept) | ${data.map((d) => d.securite?.cambriolages != null ? `${d.securite.cambriolages.toLocaleString("fr-FR")} (${d.securite.tauxCambriolages?.toFixed(2) ?? "?"}\u2030)` : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83D\uDEE1\uFE0F Vols sans violence (dept) | ${data.map((d) => d.securite?.volsSansViolence != null ? d.securite.volsSansViolence.toLocaleString("fr-FR") : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83D\uDEE1\uFE0F Violences physiques (dept) | ${data.map((d) => d.securite?.violencesPhysiques != null ? d.securite.violencesPhysiques.toLocaleString("fr-FR") : "N/A").join(" | ")} |`);
+  // T56 -- Lignes risques naturels
+  lines.push(`| \u26A0\uFE0F Risques naturels | ${data.map((d) => d.risques ? `${d.risques.nbRisques} identifie(s)` : "N/A").join(" | ")} |`);
+  lines.push(`| \u26A0\uFE0F Arretes CatNat | ${data.map((d) => d.risques ? String(d.risques.nbCatNat) : "N/A").join(" | ")} |`);
   lines.push(`| Intercommunalite | ${data.map((d) => d.intercommunalite ?? "N/A").join(" | ")} |`);
   lines.push("");
 
@@ -610,11 +690,13 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   }
   lines.push("");
   // Note donnees departementales
-  const hasDeptData = withScores.length > 0 || withSante.length > 0;
+  const withSecurite = data.filter((d) => d.securite !== null);
+  const hasDeptData = withScores.length > 0 || withSante.length > 0 || withSecurite.length > 0;
   if (hasDeptData) {
     const deptItems = [];
     if (withScores.length > 0) deptItems.push("Scores 6eme/IPS");
     if (withSante.length > 0) deptItems.push("densite medecins/patientele MT");
+    if (withSecurite.length > 0) deptItems.push("securite/delinquance");
     lines.push(`_Note : ${deptItems.join(", ")} = donnees departementales, non communales._`);
   }
   lines.push("");
@@ -624,7 +706,7 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     lines.push("");
   }
 
-  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales + Carte scolaire DEPP via data.education.gouv.fr, CNAM via data.ameli.fr (sante)_");
+  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales + Carte scolaire DEPP via data.education.gouv.fr, CNAM via data.ameli.fr (sante), SSMSI via data.gouv.fr (securite), Georisques BRGM/MTE (risques)_");
   return lines.join("\n");
 }
 
