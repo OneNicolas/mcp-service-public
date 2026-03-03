@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.4.1
+- **Version actuelle** : v1.5.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -25,7 +25,7 @@ src/
 ├── index.ts              # Router MCP + tool definitions + dispatcher (VERSION ici)
 ├── types.ts              # Env, ToolResult, Fiche...
 ├── tools/                # 1 fichier = 1 outil, export async function
-│   ├── rechercher.ts                       # Dispatch unifie intelligent (13 categories)
+│   ├── rechercher.ts                       # Dispatch unifie intelligent (14 categories)
 │   ├── rechercher-fiche.ts                 # FTS sur D1 (sanitizer + fallback LIKE + snippets)
 │   ├── lire-fiche.ts                       # Lecture fiche par ID
 │   ├── rechercher-service-local.ts         # Proxy annuaire
@@ -43,6 +43,7 @@ src/
 │   ├── rechercher-etablissement-scolaire.ts # Annuaire education (ecoles, colleges, lycees)
 │   ├── consulter-resultats-lycee.ts        # IVAL lycees GT + Pro (taux reussite, VA, mentions)
 │   ├── consulter-evaluations-nationales.ts # Evaluations nationales 6eme + CE2 par departement
+│   ├── consulter-parcoursup.ts             # Formations Parcoursup (14 000+ formations, selectivite, profil admis)
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -53,6 +54,8 @@ src/
 │       ├── rechercher-etablissement-scolaire.test.ts
 │       ├── consulter-resultats-lycee.test.ts
 │       ├── consulter-evaluations-nationales.test.ts
+│       ├── consulter-parcoursup.test.ts
+│       ├── rechercher-integration.test.ts
 │       └── comparer-communes-education.test.ts
 ├── utils/
 │   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
@@ -74,11 +77,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 18 outils actuels (v1.4.1)
+## Les 19 outils actuels (v1.5.0)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (13 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales) |
+| 1 | `rechercher` | Dispatch unifie (14 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -96,6 +99,7 @@ src/
 | 16 | `rechercher_etablissement_scolaire` | Annuaire education (68 000+ ecoles, colleges, lycees par commune) |
 | 17 | `consulter_resultats_lycee` | IVAL lycees GT + Pro (taux reussite bac, VA, mentions, acces 2nde-bac) |
 | 18 | `consulter_evaluations_nationales` | Evaluations nationales 6eme + CE2 par departement (scores, IPS, groupes, tendance) |
+| 19 | `consulter_parcoursup` | Formations Parcoursup par mot-cle, ville, departement, filiere (14 000+ formations, selectivite, profil admis) |
 
 ## Historique des sprints
 
@@ -165,6 +169,15 @@ src/
 | T39 | Nouveau tool `consulter_evaluations_nationales` (scores 6eme + CE2 par departement, IPS) |
 | T40 | Integrer scores 6eme dans `comparer_communes` (francais, maths, IPS par departement) |
 | T41 | Tests robustesse education + dispatch (parseEducationResults edge cases, nouveaux patterns) |
+
+### Sprint 13 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T42 | Nouveau tool `consulter_parcoursup` (formations Parcoursup par mot-cle, ville, departement, filiere, 14 000+ formations) |
+| T43 | Colleges de secteur (carte scolaire) dans `comparer_communes` via data.education.gouv.fr |
+| T44 | Categorie `parcoursup` dans le dispatch `rechercher.ts` (14 categories) |
+| T45 | Historique multi-annees IVAL dans `consulter_resultats_lycee` (parametre `evolution: true`, sessions 2012-2024) |
+| T46 | Tests Parcoursup + dispatch + integration (309 tests total) |
 
 ## Contraintes techniques
 

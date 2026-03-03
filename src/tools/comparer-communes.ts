@@ -33,6 +33,11 @@ interface Scores6emeData {
   ips: number;
 }
 
+export interface CollegeDistrict {
+  codeRne: string;
+  nom: string | null;
+}
+
 interface CommuneData {
   nom: string;
   code: string;
@@ -49,6 +54,7 @@ interface CommuneData {
   servicesCount: number | null;
   education: EducationStats | null;
   scores6eme: Scores6emeData | null;
+  collegesDistrict: CollegeDistrict[] | null;
 }
 
 export async function comparerCommunes(args: ComparerCommunesArgs): Promise<ToolResult> {
@@ -124,7 +130,7 @@ async function resolveInput(input: string): Promise<{ nom: string; code: string 
 async function fetchCommuneData(nom: string, code: string): Promise<CommuneData> {
   const codeDept = extractDeptFromInsee(code);
 
-  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult] = await Promise.allSettled([
+  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult] = await Promise.allSettled([
     fetchREI(code),
     fetchDvfMedianPrixM2(code, "Appartement"),
     fetchDvfMedianPrixM2(code, "Maison"),
@@ -133,6 +139,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     fetchEducationStats(nom),
     resolveCodeInsee(code),
     fetchScoresForCompare(codeDept),
+    fetchCollegesDistrict(nom),
   ]);
 
   const rei = reiResult.status === "fulfilled" ? reiResult.value : null;
@@ -143,6 +150,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
   const education = educationResult.status === "fulfilled" ? educationResult.value : null;
   const geo = geoResult.status === "fulfilled" ? geoResult.value : null;
   const scores6eme = scores6emeResult.status === "fulfilled" ? scores6emeResult.value : null;
+  const collegesDistrict = collegesResult.status === "fulfilled" ? collegesResult.value : null;
 
   // Densite = population / (surface en hectares / 100) = hab/km2
   const population = geo?.population ?? null;
@@ -163,6 +171,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     servicesCount: services,
     education,
     scores6eme,
+    collegesDistrict,
   };
 }
 
@@ -351,6 +360,65 @@ async function fetchZonage(codeInsee: string): Promise<string | null> {
   return null;
 }
 
+const CARTE_SCOLAIRE_API = "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-carte-scolaire-colleges-publics@dataeducation/records";
+
+// T43 -- Colleges de secteur (carte scolaire) pour une commune
+export async function fetchCollegesDistrict(communeName: string): Promise<CollegeDistrict[] | null> {
+  try {
+    // Etape 1 : recuperer les codes RNE distincts de la carte scolaire
+    const params = new URLSearchParams({
+      select: "code_rne",
+      where: `libelle_commune = '${sanitize(communeName.toUpperCase())}'`,
+      group_by: "code_rne",
+      limit: "20",
+    });
+
+    const response = await cachedFetch(`${CARTE_SCOLAIRE_API}?${params}`, { ttl: CACHE_TTL.ANNUAIRE });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      results: Array<{ additional_properties?: { code_rne?: string } }>;
+    };
+
+    if (!data.results?.length) return null;
+
+    const rnes = data.results
+      .map((r) => r.additional_properties?.code_rne)
+      .filter((rne): rne is string => !!rne);
+
+    if (rnes.length === 0) return null;
+
+    // Etape 2 : recuperer les noms depuis l'annuaire education
+    const rneFilter = rnes.map((r) => `'${sanitize(r)}'`).join(", ");
+    const annuaireParams = new URLSearchParams({
+      select: "identifiant_de_l_etablissement, nom_etablissement",
+      where: `identifiant_de_l_etablissement IN (${rneFilter})`,
+      limit: "20",
+    });
+
+    const annuaireResp = await cachedFetch(`${EDUCATION_API}?${annuaireParams}`, { ttl: CACHE_TTL.ANNUAIRE });
+
+    const nameMap = new Map<string, string>();
+    if (annuaireResp.ok) {
+      const annuaireData = (await annuaireResp.json()) as {
+        results: Array<{ additional_properties?: { identifiant_de_l_etablissement?: string; nom_etablissement?: string } }>;
+      };
+      for (const r of annuaireData.results ?? []) {
+        const id = r.additional_properties?.identifiant_de_l_etablissement;
+        const nom = r.additional_properties?.nom_etablissement;
+        if (id && nom) nameMap.set(id, nom);
+      }
+    }
+
+    return rnes.map((rne) => ({
+      codeRne: rne,
+      nom: nameMap.get(rne) ?? null,
+    }));
+  } catch {
+    return null;
+  }
+}
+
 function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const lines: string[] = [];
   const nbCommunes = data.length;
@@ -377,6 +445,8 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   // T31 -- Lignes education
   lines.push(`| \uD83C\uDFEB Ecoles | ${data.map((d) => d.education ? String(d.education.ecoles) : "N/A").join(" | ")} |`);
   lines.push(`| \uD83C\uDFEB Coll\u00E8ges | ${data.map((d) => d.education ? String(d.education.colleges) : "N/A").join(" | ")} |`);
+  // T43 -- Colleges de secteur (carte scolaire)
+  lines.push(`| \uD83C\uDFEB Coll\u00E8ges de secteur | ${data.map((d) => formatCollegesDistrict(d.collegesDistrict)).join(" | ")} |`);
   lines.push(`| \uD83C\uDFEB Lyc\u00E9es | ${data.map((d) => d.education ? String(d.education.lycees) : "N/A").join(" | ")} |`);
   lines.push(`| \uD83C\uDFEB Total \u00E9tablissements | ${data.map((d) => d.education ? String(d.education.ecoles + d.education.colleges + d.education.lycees) : "N/A").join(" | ")} |`);
   // T40 -- Scores 6eme departementaux
@@ -460,8 +530,15 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     lines.push("");
   }
 
-  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales DEPP via data.education.gouv.fr_");
+  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales + Carte scolaire DEPP via data.education.gouv.fr_");
   return lines.join("\n");
+}
+
+function formatCollegesDistrict(colleges: CollegeDistrict[] | null): string {
+  if (!colleges || colleges.length === 0) return "N/A";
+  return colleges
+    .map((c) => c.nom ?? c.codeRne)
+    .join(", ");
 }
 
 function formatEuro(value: number): string {

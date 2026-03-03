@@ -12,6 +12,7 @@ import { rechercherEntreprise } from "./rechercher-entreprise.js";
 import { rechercherEtablissementScolaire } from "./rechercher-etablissement-scolaire.js";
 import { consulterResultatsLycee } from "./consulter-resultats-lycee.js";
 import { consulterEvaluationsNationales } from "./consulter-evaluations-nationales.js";
+import { consulterParcoursup } from "./consulter-parcoursup.js";
 
 interface RechercherArgs {
   query: string;
@@ -31,7 +32,8 @@ export type QueryCategory =
   | "recherche_entreprise"
   | "etablissement_scolaire"
   | "resultats_lycee"
-  | "evaluations_nationales";
+  | "evaluations_nationales"
+  | "parcoursup";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -200,6 +202,27 @@ export async function rechercher(
       return prefixResult(result, "\uD83D\uDCCA Evaluations nationales");
     }
 
+    case "parcoursup": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const filiere = extractFiliereParcoursup(query);
+      // Nettoyer la query des termes generiques pour la recherche textuelle
+      const cleanedSearch = query
+        .replace(/\b(parcoursup|formation|formations|etudes|etude|superieures?|orientation|post.?bac|admission|voeux|candidature)\b/gi, "")
+        .replace(/\b(a|de|pour|dans|en|sur|les|des|du|au)\b/gi, "")
+        .trim();
+      const recherche = cleanedSearch.length >= 3 ? cleanedSearch : undefined;
+      const ville = communeName ?? undefined;
+      const result = await consulterParcoursup({
+        recherche,
+        ville,
+        code_postal: codePostal ?? undefined,
+        filiere: filiere ?? undefined,
+        limit,
+      });
+      return prefixResult(result, "\uD83C\uDF93 Formations Parcoursup");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -298,6 +321,29 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of conventionPatterns) {
     if (pattern.test(q)) return "convention_collective";
+  }
+
+  // T42 -- Patterns Parcoursup (avant evaluations nationales et education general)
+  const parcoursupPatterns = [
+    /\bparcoursup\b/,
+    /\bformation(s)?\s+(superieure|post.?bac|enseignement\s+superieur)\b/,
+    // Filieres non ambigues : matchent seules
+    /\b(cpge|las|ifsi|dcg)\b/,
+    /\bdn\s*made\b/,
+    // Filieres ambigues : requierent un mot supplementaire
+    /\b(but|bts|prepa|pass)\b\s+\w/,
+    /\blicence\b.*\b(a|de|pour|dans|universite|fac)\b/,
+    /\b(a|de|pour|dans)\b.*\blicence\b/,
+    /\borientation\b.*\b(post.?bac|superieur|etudes?)\b/,
+    /\betudes?\s+superieure?s?\b/,
+    /\b(admission|admis|selectivite|taux\s+d.?acces)\b.*\b(formation|but|bts|licence|cpge)\b/,
+    /\bvoeux\b.*\b(parcoursup|formation)\b/,
+    /\bpost.?bac\b/,
+    /\becole\s+d.?ingenieur\b/,
+  ];
+
+  for (const pattern of parcoursupPatterns) {
+    if (pattern.test(q)) return "parcoursup";
   }
 
   // T39 -- Patterns evaluations nationales (avant IVAL et education general)
@@ -664,6 +710,22 @@ export function extractNiveauScolaire(query: string): "6eme" | "CE2" | null {
   const q = query.toLowerCase();
   if (/\b(6eme|sixieme|6\u00e8me)\b/.test(q)) return "6eme";
   if (/\bce2\b/.test(q)) return "CE2";
+  return null;
+}
+
+/** T42 -- Extrait la filiere Parcoursup de la query */
+export function extractFiliereParcoursup(query: string): string | null {
+  const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\bbut\b/.test(q)) return "BUT";
+  if (/\bbts\b/.test(q)) return "BTS";
+  if (/\b(cpge|prepa|classe\s+preparatoire)\b/.test(q)) return "CPGE";
+  if (/\blicence\b/.test(q)) return "Licence";
+  if (/\bpass\b/.test(q)) return "PASS";
+  if (/\blas\b/.test(q)) return "LAS";
+  if (/\b(ifsi|infirmier)\b/.test(q)) return "IFSI";
+  if (/\b(ingenieur|ecole\s+d.?ingenieur)\b/.test(q)) return "ingenieur";
+  if (/\b(dn\s*made|dnmade)\b/.test(q)) return "DN MADE";
+  if (/\bdcg\b/.test(q)) return "DCG";
   return null;
 }
 

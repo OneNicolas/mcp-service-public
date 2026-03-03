@@ -1,7 +1,7 @@
 {
   "name": "mcp-service-public",
-  "version": "1.4.1",
-  "description": "MCP Server for French service-public.fr — 18 outils : fiches pratiques, fiscalite, DVF, simulateurs IR/TF/notaire, conventions collectives, zonage ABC, recherche entreprise, education, evaluations nationales",
+  "version": "1.5.0",
+  "description": "MCP Server for French service-public.fr — 19 outils : fiches pratiques, fiscalite, DVF, simulateurs IR/TF/notaire, conventions collectives, zonage ABC, recherche entreprise, education, evaluations nationales, Parcoursup",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

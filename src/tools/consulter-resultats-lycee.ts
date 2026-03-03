@@ -22,6 +22,7 @@ interface ConsulterResultatsArgs {
   code_insee?: string;
   nom_lycee?: string;
   type?: "gt" | "pro" | "tous";
+  evolution?: boolean;
   limit?: number;
 }
 
@@ -53,7 +54,7 @@ interface ExploreResponse {
 export async function consulterResultatsLycee(
   args: ConsulterResultatsArgs,
 ): Promise<ToolResult> {
-  const { commune, code_postal, code_insee, nom_lycee, type = "tous", limit = 10 } = args;
+  const { commune, code_postal, code_insee, nom_lycee, type = "tous", evolution = false, limit = 10 } = args;
   const maxLimit = Math.min(Math.max(limit, 1), 20);
 
   if (!commune && !code_postal && !code_insee && !nom_lycee) {
@@ -80,6 +81,11 @@ export async function consulterResultatsLycee(
     }
 
     const whereStr = whereClauses.length > 0 ? whereClauses.join(" AND ") : "";
+
+    // Mode evolution : historique multi-annees pour un lycee
+    if (evolution) {
+      return fetchEvolutionIval(whereStr, type, maxLimit);
+    }
 
     // Requetes paralleles GT et/ou Pro
     const fetchGT = type !== "pro";
@@ -169,6 +175,99 @@ async function fetchIvalData(
   if (!response.ok) return null;
 
   return (await response.json()) as ExploreResponse;
+}
+
+/** T45 -- Historique multi-annees IVAL */
+async function fetchEvolutionIval(
+  where: string,
+  type: string,
+  limit: number,
+): Promise<ToolResult> {
+  const fetchGT = type !== "pro";
+  const fetchPro = type !== "gt";
+
+  // Augmenter la limite pour recuperer plusieurs annees
+  const historyLimit = Math.min(limit * 6, 100);
+
+  const [gtResults, proResults] = await Promise.all([
+    fetchGT ? fetchIvalData(DATASET_GT, where, historyLimit) : Promise.resolve(null),
+    fetchPro ? fetchIvalData(DATASET_PRO, where, historyLimit) : Promise.resolve(null),
+  ]);
+
+  // Regrouper par lycee (UAI) et voie
+  const byLycee = new Map<string, { nom: string; voie: string; records: IvalRecord[] }>();
+
+  for (const [results, voie] of [
+    [gtResults, "GT"] as const,
+    [proResults, "Pro"] as const,
+  ]) {
+    if (!results?.results?.length) continue;
+    for (const r of results.results) {
+      const rec = r.additional_properties;
+      const key = `${rec.uai ?? "?"}-${voie}`;
+      if (!byLycee.has(key)) {
+        byLycee.set(key, {
+          nom: rec.libelle_uai ?? "Lycee",
+          voie: voie === "GT" ? "General/Technologique" : "Professionnel",
+          records: [],
+        });
+      }
+      byLycee.get(key)!.records.push(rec);
+    }
+  }
+
+  if (byLycee.size === 0) {
+    return {
+      content: [{ type: "text", text: "Aucun historique IVAL trouve. Verifiez les criteres." }],
+    };
+  }
+
+  const sections: string[] = [];
+
+  for (const [, { nom, voie, records }] of byLycee) {
+    // Trier par annee croissante
+    records.sort((a, b) => (a.annee ?? "").localeCompare(b.annee ?? ""));
+
+    const lines: string[] = [];
+    lines.push(`## ${nom} (${voie})`);
+    lines.push("");
+    lines.push("| Session | Taux reussite | VA reussite | Taux mentions | VA mentions | Taux acces 2nde-bac | VA acces | Candidats |");
+    lines.push("| --- | --- | --- | --- | --- | --- | --- | --- |");
+
+    for (const r of records) {
+      const vaReu = formatVA(r.va_reu_total);
+      const vaMen = formatVA(r.va_men_total);
+      const vaAcc = formatVA(r.va_acces_2nde);
+      lines.push(`| ${r.annee ?? "?"} | ${r.taux_reu_total ?? "?"} % | ${vaReu} | ${r.taux_men_total ?? "?"} % | ${vaMen} | ${r.taux_acces_2nde ?? "?"} % | ${vaAcc} | ${r.presents_total ?? "?"} |`);
+    }
+
+    // Tendance
+    if (records.length >= 2) {
+      const first = records[0];
+      const last = records[records.length - 1];
+      const diffReu = (last.taux_reu_total ?? 0) - (first.taux_reu_total ?? 0);
+      const diffMen = (last.taux_men_total ?? 0) - (first.taux_men_total ?? 0);
+      lines.push("");
+      lines.push(`**Tendance ${first.annee} -> ${last.annee} :**`);
+      lines.push(`  Reussite : ${formatTendance(diffReu)} | Mentions : ${formatTendance(diffMen)}`);
+    }
+
+    sections.push(lines.join("\n"));
+  }
+
+  const header = "**Historique IVAL — Evolution multi-annees**\n";
+  const hint = "\n\n\uD83D\uDCA1 _La valeur ajoutee (VA) mesure l'apport propre du lycee. Sessions 2012-2024._";
+  const footer = "\n_Source : IVAL DEPP via data.education.gouv.fr_";
+
+  return {
+    content: [{ type: "text", text: header + sections.join("\n\n---\n\n") + hint + footer }],
+  };
+}
+
+function formatTendance(diff: number): string {
+  if (diff > 2) return `\u2B06\uFE0F +${diff.toFixed(1)} pts (progression)`;
+  if (diff < -2) return `\u2B07\uFE0F ${diff.toFixed(1)} pts (recul)`;
+  return `\u27A1\uFE0F ${diff >= 0 ? "+" : ""}${diff.toFixed(1)} pts (stable)`;
 }
 
 /** Resolution commune/code_postal/code_insee */

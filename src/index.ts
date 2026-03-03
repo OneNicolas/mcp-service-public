@@ -17,12 +17,13 @@ import { rechercherEntreprise } from "./tools/rechercher-entreprise.js";
 import { rechercherEtablissementScolaire } from "./tools/rechercher-etablissement-scolaire.js";
 import { consulterResultatsLycee } from "./tools/consulter-resultats-lycee.js";
 import { consulterEvaluationsNationales } from "./tools/consulter-evaluations-nationales.js";
+import { consulterParcoursup } from "./tools/consulter-parcoursup.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.4.1";
+const VERSION = "1.5.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -288,6 +289,7 @@ const TOOLS = [
         code_insee: { type: "string", description: "Code INSEE de la commune" },
         nom_lycee: { type: "string", description: "Nom du lycee (recherche partielle, ex: 'Lacassagne', 'Guimard')" },
         type: { type: "string", enum: ["gt", "pro", "tous"], description: "Voie : 'gt' (general/techno), 'pro' (professionnel), 'tous' (defaut)" },
+        evolution: { type: "boolean", description: "Si true, retourne l'historique multi-annees (2012-2024) avec tendance, au lieu de la derniere session uniquement." },
         limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
       },
     },
@@ -304,6 +306,22 @@ const TOOLS = [
         code_departement: { type: "string", description: "Code departement direct (ex: '93', '75', '2A', '971')" },
         niveau: { type: "string", enum: ["6eme", "CE2", "tous"], description: "Niveau scolaire (defaut: 'tous')" },
         annee: { type: "number", description: "Annee scolaire (ex: 2025). Par defaut : derniere disponible." },
+      },
+    },
+  },
+  {
+    name: "consulter_parcoursup",
+    description:
+      "Recherche des formations sur Parcoursup par mot-cle, ville, departement ou filiere. Retourne les informations detaillees : etablissement, selectivite, taux d'acces, capacite, nombre de voeux, profil des admis (bac, mentions, boursiers), lien fiche Parcoursup. Donnees session 2025. Source : Ministere de l'Enseignement superieur via data.education.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Mot-cle ou intitule de formation (ex: 'informatique', 'BTS comptabilite', 'licence droit')" },
+        ville: { type: "string", description: "Ville de l'etablissement (ex: 'Lyon', 'Paris')" },
+        code_postal: { type: "string", description: "Code postal (ex: '69001'). Resout automatiquement vers la ville." },
+        departement: { type: "string", description: "Code departement (ex: '69', '93', '2A')" },
+        filiere: { type: "string", description: "Type de filiere : 'BUT', 'BTS', 'Licence', 'CPGE', 'PASS', 'LAS', 'IFSI', 'ingenieur'" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
       },
     },
   },
@@ -350,9 +368,11 @@ async function executeTool(
     case "rechercher_etablissement_scolaire":
       return rechercherEtablissementScolaire(args as { commune?: string; code_postal?: string; code_insee?: string; type?: string; statut?: "public" | "prive"; nom?: string; limit?: number });
     case "consulter_resultats_lycee":
-      return consulterResultatsLycee(args as { commune?: string; code_postal?: string; code_insee?: string; nom_lycee?: string; type?: "gt" | "pro" | "tous"; limit?: number });
+      return consulterResultatsLycee(args as { commune?: string; code_postal?: string; code_insee?: string; nom_lycee?: string; type?: "gt" | "pro" | "tous"; evolution?: boolean; limit?: number });
     case "consulter_evaluations_nationales":
       return consulterEvaluationsNationales(args as { commune?: string; code_postal?: string; code_departement?: string; niveau?: "6eme" | "CE2" | "tous"; annee?: number });
+    case "consulter_parcoursup":
+      return consulterParcoursup(args as { recherche?: string; ville?: string; code_postal?: string; departement?: string; filiere?: string; limit?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -407,6 +427,7 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Conventions : rechercher_convention_collective (IDCC ou mot-cle)",
           "   - Education : rechercher_etablissement_scolaire (ecoles, colleges, lycees par commune)",
           "   - Resultats lycees : consulter_resultats_lycee (IVAL — taux reussite, VA, mentions par lycee)",
+          "   - Parcoursup : consulter_parcoursup (formations, selectivite, profil admis par ville/filiere)",
           "",
           "PARAMETRES IMPORTANTS :",
           "- Les communes acceptent un nom, un code postal ou un code INSEE.",
