@@ -13,6 +13,8 @@ import { rechercherEtablissementScolaire } from "./rechercher-etablissement-scol
 import { consulterResultatsLycee } from "./consulter-resultats-lycee.js";
 import { consulterEvaluationsNationales } from "./consulter-evaluations-nationales.js";
 import { consulterParcoursup } from "./consulter-parcoursup.js";
+import { consulterAccesSoins } from "./consulter-acces-soins.js";
+import { consulterInsertionProfessionnelle } from "./consulter-insertion-professionnelle.js";
 
 interface RechercherArgs {
   query: string;
@@ -33,7 +35,9 @@ export type QueryCategory =
   | "etablissement_scolaire"
   | "resultats_lycee"
   | "evaluations_nationales"
-  | "parcoursup";
+  | "parcoursup"
+  | "acces_soins"
+  | "insertion_pro";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -223,6 +227,35 @@ export async function rechercher(
       return prefixResult(result, "\uD83C\uDF93 Formations Parcoursup");
     }
 
+    case "acces_soins": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const codeDept = extractCodeDepartement(query);
+      const loc = codeDept ? { code_departement: codeDept } : communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
+      const result = await consulterAccesSoins(loc);
+      return prefixResult(result, "\u{1FA7A} Acces aux soins (data.ameli.fr)");
+    }
+
+    case "insertion_pro": {
+      const communeName = extractCommuneName(query);
+      const codeDept = extractCodeDepartement(query);
+      const ville = communeName ?? undefined;
+      const codeDepartement = codeDept ?? undefined;
+      // Nettoyer la query des termes generiques pour la recherche textuelle
+      const cleanedSearch = query
+        .replace(/\b(insertion|professionnelle|inserjeunes|taux|emploi|apres|sortie|devenir|lyceen|apprenti|debouche|poursuite|etude|etudes)s?\b/gi, "")
+        .replace(/\b(a|de|pour|dans|en|sur|les|des|du|au|la|le|d)\b/gi, "")
+        .trim();
+      const recherche = cleanedSearch.length >= 3 ? cleanedSearch : undefined;
+      const insertionResult = await consulterInsertionProfessionnelle({
+        recherche,
+        ville,
+        code_departement: codeDepartement,
+        limit,
+      });
+      return prefixResult(insertionResult, "\uD83D\uDCBC Insertion professionnelle (InserJeunes)");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -321,6 +354,45 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of conventionPatterns) {
     if (pattern.test(q)) return "convention_collective";
+  }
+
+  // T47 -- Patterns acces aux soins
+  const accesSoinsPatterns = [
+    /\bacces\s+aux?\s+soins?\b/,
+    /\bdensite\b.*\b(medecin|generaliste|specialiste|medic)s?\b/,
+    /\b(medecin|generaliste|specialiste)s?\b.*\b(densite|nombre|effectif|combien)\b/,
+    /\bmedecin\s+traitant\b/,
+    /\bpatientele\b/,
+    /\bdeserts?\s+(medical|medicaux)\b/,
+    /\bzone\s+sous.?dotee\b/,
+    /\bprimo.?install(ation|e)s?\b.*\b(medecin|generaliste)s?\b/,
+    /\bdemographie\s+(medicale|sanitaire)\b/,
+    /\boffre\s+de\s+soins?\b/,
+    /\b(ophtalmologue|dermatologue|cardiologue|pediatre|gynecologue|psychiatre)s?\b.*\b(nombre|effectif|densite)\b/,
+    /\b(nombre|effectif|densite)\b.*\b(ophtalmologue|dermatologue|cardiologue|pediatre|gynecologue|psychiatre)s?\b/,
+  ];
+
+  for (const pattern of accesSoinsPatterns) {
+    if (pattern.test(q)) return "acces_soins";
+  }
+
+  // T48 -- Patterns insertion professionnelle (avant Parcoursup et education general)
+  const insertionProPatterns = [
+    /\binsertion\s+professionnelle\b/,
+    /\binserjeunes\b/,
+    /\btaux\s+d.?emploi\b.*\b(apres|sortie|cap|bac\s*pro|bts|lycee|formation)\b/,
+    /\b(apres|sortie)\b.*\b(cap|bac\s*pro|bts|mention\s+complementaire)\b.*\b(emploi|travail|insertion)\b/,
+    /\b(emploi|travail|insertion)\b.*\b(apres|sortie)\b.*\b(cap|bac\s*pro|bts)\b/,
+    /\b(devenir|deviennent)\b.*\b(lyceens?|apprentis?|eleves?\s+pro)\b/,
+    /\b(lyceens?|apprentis?)\b.*\b(devenir|deviennent)\b/,
+    /\b(cap|bac\s*pro|bts)\b.*\b(debouches?|insertion|emploi\s+6\s*mois)\b/,
+    /\bdebouches?\b.*\b(cap|bac\s*pro|bts|voie\s+pro|lycee\s+pro)\b/,
+    /\bpoursuite\s+d.?etudes?\b.*\b(cap|bac\s*pro|bts|voie\s+pro|lycee\s+pro)\b/,
+    /\b(valeur\s+ajoutee|va)\b.*\b(insertion|emploi)\b.*\b(lycee|pro)\b/,
+  ];
+
+  for (const pattern of insertionProPatterns) {
+    if (pattern.test(q)) return "insertion_pro";
   }
 
   // T42 -- Patterns Parcoursup (avant evaluations nationales et education general)

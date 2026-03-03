@@ -38,6 +38,12 @@ export interface CollegeDistrict {
   nom: string | null;
 }
 
+interface SanteData {
+  densiteMG: number | null;
+  densiteSpecialistes: number | null;
+  patienteleMT: number | null;
+}
+
 interface CommuneData {
   nom: string;
   code: string;
@@ -55,6 +61,7 @@ interface CommuneData {
   education: EducationStats | null;
   scores6eme: Scores6emeData | null;
   collegesDistrict: CollegeDistrict[] | null;
+  sante: SanteData | null;
 }
 
 export async function comparerCommunes(args: ComparerCommunesArgs): Promise<ToolResult> {
@@ -130,7 +137,7 @@ async function resolveInput(input: string): Promise<{ nom: string; code: string 
 async function fetchCommuneData(nom: string, code: string): Promise<CommuneData> {
   const codeDept = extractDeptFromInsee(code);
 
-  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult] = await Promise.allSettled([
+  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult, santeResult] = await Promise.allSettled([
     fetchREI(code),
     fetchDvfMedianPrixM2(code, "Appartement"),
     fetchDvfMedianPrixM2(code, "Maison"),
@@ -140,6 +147,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     resolveCodeInsee(code),
     fetchScoresForCompare(codeDept),
     fetchCollegesDistrict(nom),
+    fetchSanteForCompare(codeDept),
   ]);
 
   const rei = reiResult.status === "fulfilled" ? reiResult.value : null;
@@ -151,6 +159,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
   const geo = geoResult.status === "fulfilled" ? geoResult.value : null;
   const scores6eme = scores6emeResult.status === "fulfilled" ? scores6emeResult.value : null;
   const collegesDistrict = collegesResult.status === "fulfilled" ? collegesResult.value : null;
+  const sante = santeResult.status === "fulfilled" ? santeResult.value : null;
 
   // Densite = population / (surface en hectares / 100) = hab/km2
   const population = geo?.population ?? null;
@@ -172,6 +181,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     education,
     scores6eme,
     collegesDistrict,
+    sante,
   };
 }
 
@@ -419,6 +429,73 @@ export async function fetchCollegesDistrict(communeName: string): Promise<Colleg
   }
 }
 
+const AMELI_API = "https://data.ameli.fr/api/explore/v2.1/catalog/datasets";
+const DS_DEMOGRAPHIE = "demographie-effectifs-et-les-densites";
+const DS_PATIENTELE = "patientele-medecintraitant-generalistes-annuelle";
+
+// T49 -- Donnees sante departementales pour comparaison
+async function fetchSanteForCompare(codeDept: string): Promise<SanteData | null> {
+  try {
+    // 1. Densite MG et total specialistes
+    const demoParams = new URLSearchParams({
+      select: "profession_sante, densite",
+      where: `departement='${sanitize(codeDept)}' AND classe_age='tout_age' AND libelle_sexe='tout sexe'`,
+      order_by: "annee DESC",
+      limit: "40",
+    });
+
+    const demoResp = await cachedFetch(`${AMELI_API}/${DS_DEMOGRAPHIE}/records?${demoParams}`, { ttl: CACHE_TTL.ANNUAIRE });
+    let densiteMG: number | null = null;
+    let densiteSpec: number | null = null;
+
+    if (demoResp.ok) {
+      const demoData = (await demoResp.json()) as { results: Array<{ additional_properties?: Record<string, unknown> }> };
+      const specDensites: number[] = [];
+      // Garder uniquement la derniere annee (tri DESC deja fait)
+      const seenProfessions = new Set<string>();
+      for (const r of demoData.results ?? []) {
+        const p = r.additional_properties;
+        const prof = String(p?.profession_sante ?? "");
+        if (seenProfessions.has(prof)) continue;
+        seenProfessions.add(prof);
+        const d = Number(p?.densite ?? 0);
+        if (d <= 0) continue;
+        const profLower = prof.toLowerCase();
+        if (profLower.includes("generaliste")) {
+          densiteMG = d;
+        } else if (!profLower.includes("ensemble")) {
+          specDensites.push(d);
+        }
+      }
+      if (specDensites.length > 0) {
+        densiteSpec = Math.round(specDensites.reduce((a, b) => a + b, 0) * 10) / 10;
+      }
+    }
+
+    // 2. Patientele MT moyenne
+    const mtParams = new URLSearchParams({
+      select: "patientele_mt_moyenne",
+      where: `departement='${sanitize(codeDept)}'`,
+      order_by: "annee DESC",
+      limit: "1",
+    });
+
+    let patienteleMT: number | null = null;
+    const mtResp = await cachedFetch(`${AMELI_API}/${DS_PATIENTELE}/records?${mtParams}`, { ttl: CACHE_TTL.ANNUAIRE });
+    if (mtResp.ok) {
+      const mtData = (await mtResp.json()) as { results: Array<{ additional_properties?: Record<string, unknown> }> };
+      if (mtData.results?.length) {
+        patienteleMT = Number(mtData.results[0].additional_properties?.patientele_mt_moyenne ?? 0) || null;
+      }
+    }
+
+    if (densiteMG === null && densiteSpec === null && patienteleMT === null) return null;
+    return { densiteMG, densiteSpecialistes: densiteSpec, patienteleMT };
+  } catch {
+    return null;
+  }
+}
+
 function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   const lines: string[] = [];
   const nbCommunes = data.length;
@@ -453,6 +530,10 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   lines.push(`| \uD83D\uDCCA Score 6eme Fran\u00E7ais (dept) | ${data.map((d) => d.scores6eme ? String(d.scores6eme.scoreFrancais) : "N/A").join(" | ")} |`);
   lines.push(`| \uD83D\uDCCA Score 6eme Maths (dept) | ${data.map((d) => d.scores6eme ? String(d.scores6eme.scoreMaths) : "N/A").join(" | ")} |`);
   lines.push(`| \uD83D\uDCCA IPS moyen (dept) | ${data.map((d) => d.scores6eme ? d.scores6eme.ips.toFixed(1) : "N/A").join(" | ")} |`);
+  // T49 -- Lignes sante
+  lines.push(`| \u{1FA7A} Densite MG (dept, /100k) | ${data.map((d) => d.sante?.densiteMG ? String(d.sante.densiteMG) : "N/A").join(" | ")} |`);
+  lines.push(`| \u{1FA7A} Densite specialistes (dept) | ${data.map((d) => d.sante?.densiteSpecialistes ? String(d.sante.densiteSpecialistes) : "N/A").join(" | ")} |`);
+  lines.push(`| \u{1FA7A} Patientele MT moy. (dept) | ${data.map((d) => d.sante?.patienteleMT ? String(Math.round(d.sante.patienteleMT)) : "N/A").join(" | ")} |`);
   lines.push(`| Intercommunalite | ${data.map((d) => d.intercommunalite ?? "N/A").join(" | ")} |`);
   lines.push("");
 
@@ -500,6 +581,15 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     const total = maxEdu.education!.ecoles + maxEdu.education!.colleges + maxEdu.education!.lycees;
     lines.push(`  \uD83C\uDFC6 Plus d'\u00E9tablissements scolaires : **${maxEdu.nom}** (${total} : ${maxEdu.education!.ecoles} \u00E9coles, ${maxEdu.education!.colleges} coll\u00E8ges, ${maxEdu.education!.lycees} lyc\u00E9es)`);
   }
+  // T49 -- Sante
+  const withSante = data.filter((d) => d.sante?.densiteMG !== null);
+  if (withSante.length >= 2) {
+    const bestMG = withSante.reduce((a, b) => (a.sante!.densiteMG ?? 0) > (b.sante!.densiteMG ?? 0) ? a : b);
+    const worstMG = withSante.reduce((a, b) => (a.sante!.densiteMG ?? Infinity) < (b.sante!.densiteMG ?? Infinity) ? a : b);
+    if ((bestMG.sante!.densiteMG ?? 0) > (worstMG.sante!.densiteMG ?? 0) * 1.1) {
+      lines.push(`  \u{1FA7A} Meilleure densite MG (dept) : **${bestMG.nom}** (${bestMG.sante!.densiteMG}/100k hab.)`);
+    }
+  }
   // T40 -- Meilleur score scolaire (ecart > 5 points)
   const withScores = data.filter((d) => d.scores6eme !== null);
   if (withScores.length >= 2) {
@@ -520,8 +610,12 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   }
   lines.push("");
   // Note donnees departementales
-  if (withScores.length > 0) {
-    lines.push("_Note : Scores 6eme et IPS = donnees departementales, non communales._");
+  const hasDeptData = withScores.length > 0 || withSante.length > 0;
+  if (hasDeptData) {
+    const deptItems = [];
+    if (withScores.length > 0) deptItems.push("Scores 6eme/IPS");
+    if (withSante.length > 0) deptItems.push("densite medecins/patientele MT");
+    lines.push(`_Note : ${deptItems.join(", ")} = donnees departementales, non communales._`);
   }
   lines.push("");
 
@@ -530,7 +624,7 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     lines.push("");
   }
 
-  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales + Carte scolaire DEPP via data.education.gouv.fr_");
+  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales + Carte scolaire DEPP via data.education.gouv.fr, CNAM via data.ameli.fr (sante)_");
   return lines.join("\n");
 }
 

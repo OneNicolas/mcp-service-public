@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.5.0
+- **Version actuelle** : v1.7.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -14,7 +14,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - TypeScript, Cloudflare Workers (Streamable HTTP MCP)
 - D1 SQLite (FTS5) pour les fiches DILA (~5 500 fiches, sync cron quotidien)
-- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), data.education.gouv.fr (Annuaire, IVAL, Evaluations nationales), geo.api.gouv.fr, annuaire API
+- APIs proxy : data.economie.gouv.fr (REI, BOFiP), data.gouv.fr (DVF, Zonage ABC, KALI), data.education.gouv.fr (Annuaire, IVAL, Evaluations nationales, InserJeunes), data.ameli.fr (soins), geo.api.gouv.fr, annuaire API
 - Vitest pour les tests unitaires
 - Pas de framework MCP SDK — implementation JSON-RPC directe
 
@@ -25,7 +25,7 @@ src/
 ├── index.ts              # Router MCP + tool definitions + dispatcher (VERSION ici)
 ├── types.ts              # Env, ToolResult, Fiche...
 ├── tools/                # 1 fichier = 1 outil, export async function
-│   ├── rechercher.ts                       # Dispatch unifie intelligent (14 categories)
+│   ├── rechercher.ts                       # Dispatch unifie intelligent (16 categories : fiches, fiscalite, doctrine, DVF, TF, frais notaire, zonage, IR, conventions, entreprises, education, IVAL, evaluations, parcoursup, acces soins, insertion pro)
 │   ├── rechercher-fiche.ts                 # FTS sur D1 (sanitizer + fallback LIKE + snippets)
 │   ├── lire-fiche.ts                       # Lecture fiche par ID
 │   ├── rechercher-service-local.ts         # Proxy annuaire
@@ -44,6 +44,8 @@ src/
 │   ├── consulter-resultats-lycee.ts        # IVAL lycees GT + Pro (taux reussite, VA, mentions)
 │   ├── consulter-evaluations-nationales.ts # Evaluations nationales 6eme + CE2 par departement
 │   ├── consulter-parcoursup.ts             # Formations Parcoursup (14 000+ formations, selectivite, profil admis)
+│   ├── consulter-acces-soins.ts            # Acces aux soins (data.ameli.fr, effectifs/densite medecins, patientele MT)
+│   ├── consulter-insertion-professionnelle.ts  # Insertion pro InserJeunes (taux emploi, poursuite etudes lycees pro)
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -56,7 +58,9 @@ src/
 │       ├── consulter-evaluations-nationales.test.ts
 │       ├── consulter-parcoursup.test.ts
 │       ├── rechercher-integration.test.ts
-│       └── comparer-communes-education.test.ts
+│       ├── comparer-communes-education.test.ts
+│       ├── consulter-acces-soins.test.ts
+│       └── consulter-insertion-professionnelle.test.ts
 ├── utils/
 │   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
 │   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune, resolveCodeInsee
@@ -77,11 +81,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 19 outils actuels (v1.5.0)
+## Les 21 outils actuels (v1.7.0)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (14 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup) |
+| 1 | `rechercher` | Dispatch unifie (16 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup, acces soins, insertion pro) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -92,7 +96,7 @@ src/
 | 9 | `simuler_taxe_fonciere` | Estimation TF = VLC estimee x 50% x taux REI reel |
 | 10 | `simuler_frais_notaire` | DMTO exact par departement + emoluments degressifs + CSI + debours |
 | 11 | `consulter_zonage_immobilier` | Zones ABC : Pinel, PTZ, plafonds loyers/ressources |
-| 12 | `comparer_communes` | Tableau croise population/densite + REI + DVF + zonage + education + scores 6eme + services (2-5 communes) |
+| 12 | `comparer_communes` | Tableau croise population/densite + REI + DVF + zonage + education + scores 6eme + sante + services (2-5 communes) |
 | 13 | `simuler_impot_revenu` | Bareme progressif IR 2025, quotient familial, decote, CEHR |
 | 14 | `rechercher_convention_collective` | Conventions collectives KALI (IDCC, mot-cle, lien Legifrance) |
 | 15 | `rechercher_entreprise` | Recherche entreprise SIRET/SIREN/nom + conventions collectives KALI |
@@ -100,6 +104,8 @@ src/
 | 17 | `consulter_resultats_lycee` | IVAL lycees GT + Pro (taux reussite bac, VA, mentions, acces 2nde-bac) |
 | 18 | `consulter_evaluations_nationales` | Evaluations nationales 6eme + CE2 par departement (scores, IPS, groupes, tendance) |
 | 19 | `consulter_parcoursup` | Formations Parcoursup par mot-cle, ville, departement, filiere (14 000+ formations, selectivite, profil admis) |
+| 20 | `consulter_acces_soins` | Acces aux soins par departement : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees (data.ameli.fr) |
+| 21 | `consulter_insertion_professionnelle` | Insertion pro InserJeunes : taux emploi 6/12/24 mois, poursuite etudes, VA, detail par formation CAP/BacPro/BTS (data.education.gouv.fr) |
 
 ## Historique des sprints
 
@@ -178,6 +184,15 @@ src/
 | T44 | Categorie `parcoursup` dans le dispatch `rechercher.ts` (14 categories) |
 | T45 | Historique multi-annees IVAL dans `consulter_resultats_lycee` (parametre `evolution: true`, sessions 2012-2024) |
 | T46 | Tests Parcoursup + dispatch + integration (309 tests total) |
+
+### Sprint 14 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T47 | Nouveau tool `consulter_acces_soins` (data.ameli.fr : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees, file active specialistes) |
+| T48 | Nouveau tool `consulter_insertion_professionnelle` (InserJeunes : taux emploi 6/12/24 mois, poursuite etudes, VA, detail par formation CAP/BacPro/BTS) |
+| T49 | Enrichir `comparer_communes` avec donnees sante departementales (densite MG, specialistes, patientele MT via data.ameli.fr) |
+| T50 | Categories `acces_soins` et `insertion_pro` dans le dispatch `rechercher.ts` (16 categories) |
+| T51 | Tests dispatch + fix regex pluriels + fix types TS (326 tests, 0 erreurs TS) |
 
 ## Contraintes techniques
 

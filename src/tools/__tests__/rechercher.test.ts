@@ -570,3 +570,52 @@ describe("extractTypeEtablissement", () => {
     expect(extractTypeEtablissement("scolarite a Paris")).toBeNull();
   });
 });
+
+// T47 -- acces_soins dispatch
+describe("classifyQuery — acces_soins", () => {
+  it("route les requetes acces aux soins", () => {
+    expect(classifyQuery("acces aux soins a Lyon")).toBe("acces_soins");
+    expect(classifyQuery("densite medecins generalistes departement 93")).toBe("acces_soins");
+    expect(classifyQuery("medecin traitant a Bondy")).toBe("acces_soins");
+    expect(classifyQuery("desert medical en Seine-Saint-Denis")).toBe("acces_soins");
+    expect(classifyQuery("zone sous-dotee medecins")).toBe("acces_soins");
+    expect(classifyQuery("patientele moyenne generalistes")).toBe("acces_soins");
+  });
+
+  it("route les specialistes", () => {
+    expect(classifyQuery("nombre ophtalmologues a Paris")).toBe("acces_soins");
+    expect(classifyQuery("effectif dermatologues departement 75")).toBe("acces_soins");
+    expect(classifyQuery("densite pediatres en Isere")).toBe("acces_soins");
+  });
+
+  it("route demographie medicale et offre de soins", () => {
+    expect(classifyQuery("demographie medicale departement 69")).toBe("acces_soins");
+    expect(classifyQuery("offre de soins a Marseille")).toBe("acces_soins");
+    expect(classifyQuery("primo-installations medecins generalistes")).toBe("acces_soins");
+  });
+});
+
+// T48 -- insertion_pro dispatch
+describe("classifyQuery — insertion_pro", () => {
+  it("route les requetes insertion professionnelle", () => {
+    expect(classifyQuery("insertion professionnelle lycee pro Lyon")).toBe("insertion_pro");
+    expect(classifyQuery("inserjeunes")).toBe("insertion_pro");
+    expect(classifyQuery("taux d'emploi apres un bac pro")).toBe("insertion_pro");
+  });
+
+  it("route devenir des lyceens et apprentis", () => {
+    expect(classifyQuery("devenir des lyceens professionnels")).toBe("insertion_pro");
+    expect(classifyQuery("que deviennent les apprentis")).toBe("insertion_pro");
+  });
+
+  it("route debouches et poursuite d'etudes voie pro", () => {
+    expect(classifyQuery("debouches apres un CAP coiffure")).toBe("insertion_pro");
+    expect(classifyQuery("poursuite d'etudes apres bac pro")).toBe("insertion_pro");
+    expect(classifyQuery("emploi 6 mois apres sortie BTS")).toBe("insertion_pro");
+  });
+
+  it("ne confond pas avec Parcoursup ou education", () => {
+    expect(classifyQuery("formation BTS informatique sur Parcoursup")).toBe("parcoursup");
+    expect(classifyQuery("lycees a Lyon")).toBe("etablissement_scolaire");
+  });
+});

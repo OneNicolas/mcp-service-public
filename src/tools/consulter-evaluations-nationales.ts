@@ -171,7 +171,7 @@ export async function fetch6emeScores(codeDept: string | null, annee?: number): 
 
     return data.results
       .map((r) => {
-        const p = r.additional_properties ?? r;
+        const p = (r.additional_properties ?? r) as Record<string, unknown>;
         return {
           annee: String(p.annee ?? ""),
           codeDept: String(p.code_departement ?? ""),
@@ -265,7 +265,7 @@ export async function fetchCE2Scores(codeDept: string | null, annee?: number): P
     if (!data.results?.length) return [];
 
     return data.results.map((r) => {
-      const p = r.additional_properties ?? r;
+      const p = (r.additional_properties ?? r) as Record<string, unknown>;
       return {
         annee: String(p.annee ?? ""),
         codeDept: String(p.code_dept ?? ""),

@@ -1,12 +1,12 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.5.0-blue)
+![Version](https://img.shields.io/badge/version-1.7.0-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-19-blueviolet)
-![Tests](https://img.shields.io/badge/tests-309%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-21-blueviolet)
+![Tests](https://img.shields.io/badge/tests-320%2B%20passing-brightgreen)
 
-Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
 ## Installation
 
@@ -22,7 +22,7 @@ https://mcp-service-public.nhaultcoeur.workers.dev/mcp
 2. Section **Integrations** > **MCP**
 3. Cliquer **Ajouter une integration**
 4. Coller l'URL ci-dessus
-5. Les 19 outils apparaissent automatiquement
+5. Les 21 outils apparaissent automatiquement
 
 ### Claude Desktop
 
@@ -163,6 +163,19 @@ Si les 19 outils sont charges, le serveur est pret.
 { "name": "consulter_parcoursup", "arguments": { "departement": "93", "filiere": "Licence" } }
 ```
 
+### Acces aux soins
+```json
+{ "name": "consulter_acces_soins", "arguments": { "commune": "Bondy" } }
+{ "name": "consulter_acces_soins", "arguments": { "code_departement": "93" } }
+```
+
+### Insertion professionnelle (InserJeunes)
+```json
+{ "name": "consulter_insertion_professionnelle", "arguments": { "ville": "Lyon", "limit": 5 } }
+{ "name": "consulter_insertion_professionnelle", "arguments": { "uai": "0691723Y" } }
+{ "name": "consulter_insertion_professionnelle", "arguments": { "recherche": "coiffure", "code_departement": "69" } }
+```
+
 ### Consulter le zonage ABC
 ```json
 { "name": "consulter_zonage_immobilier", "arguments": { "commune": "Bordeaux" } }
@@ -249,7 +262,8 @@ Cloudflare Workers (plan payant)
 +-- Proxy API (temps reel, cache + retry)
 |   +-- data.economie.gouv.fr -> REI fiscalite locale + BOFiP
 |   +-- data.gouv.fr -> DVF transactions + Zonage ABC + KALI conventions
-|   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees + Evaluations nationales + Parcoursup
+|   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees + Evaluations nationales + Parcoursup + InserJeunes
+|   +-- data.ameli.fr -> Acces aux soins (effectifs, densite, patientele MT)
 |   +-- geo.api.gouv.fr -> Resolution communes
 |   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
 |   +-- API Annuaire -> services publics locaux
@@ -266,7 +280,8 @@ Cloudflare Workers (plan payant)
 | data.gouv.fr | Proxy temps reel | DVF transactions, Zonage ABC, KALI conventions collectives |
 | geo.api.gouv.fr | Proxy temps reel | Resolution communes (CP/INSEE/nom) |
 | recherche-entreprises.api.gouv.fr | Proxy temps reel | Entreprises (SIRET/SIREN/nom, dirigeants, IDCC) |
-| data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees, evaluations nationales 6eme/CE2, formations Parcoursup |
+| data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees, evaluations nationales 6eme/CE2, formations Parcoursup, insertion pro InserJeunes |
+| data.ameli.fr | Proxy temps reel | Acces aux soins : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees |
 
 ### Endpoints
 
@@ -286,7 +301,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (309 tests)
+npx vitest run       # Tests unitaires (320+ tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```

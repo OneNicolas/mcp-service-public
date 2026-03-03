@@ -18,12 +18,14 @@ import { rechercherEtablissementScolaire } from "./tools/rechercher-etablissemen
 import { consulterResultatsLycee } from "./tools/consulter-resultats-lycee.js";
 import { consulterEvaluationsNationales } from "./tools/consulter-evaluations-nationales.js";
 import { consulterParcoursup } from "./tools/consulter-parcoursup.js";
+import { consulterAccesSoins } from "./tools/consulter-acces-soins.js";
+import { consulterInsertionProfessionnelle } from "./tools/consulter-insertion-professionnelle.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.5.0";
+const VERSION = "1.7.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -198,7 +200,7 @@ const TOOLS = [
   {
     name: "comparer_communes",
     description:
-      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : population et densit\u00e9, fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...), \u00e9tablissements scolaires (\u00e9coles, coll\u00e8ges, lyc\u00e9es) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
+      "Compare 2 \u00e0 5 communes sur un tableau crois\u00e9 : population et densit\u00e9, fiscalit\u00e9 locale (taux TFB, TEOM), prix immobiliers (DVF m\u00e9dian/m\u00b2 appart et maison), zonage ABC, nombre de services publics locaux (mairies, CAF, CPAM...), \u00e9tablissements scolaires (\u00e9coles, coll\u00e8ges, lyc\u00e9es), donn\u00e9es sant\u00e9 d\u00e9partementales (densit\u00e9 m\u00e9decins, patient\u00e8le MT) et intercommunalit\u00e9. Aide \u00e0 la d\u00e9cision pour un d\u00e9m\u00e9nagement ou un investissement. Accepte des noms de communes, codes postaux ou codes INSEE.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -325,6 +327,35 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "consulter_acces_soins",
+    description:
+      "Consulte les donnees d'acces aux soins par departement : effectifs et densite des medecins generalistes et specialistes liberaux, patientele medecin traitant, primo-installations, installations en zones sous-dotees, file active. Compare avec les moyennes nationales. Accepte un nom de commune, un code postal ou un code departement. Source : Assurance Maladie (CNAM) via data.ameli.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Bondy', 'Lyon') \u2014 resout le departement automatiquement" },
+        code_postal: { type: "string", description: "Code postal (ex: '93140') \u2014 resout le departement automatiquement" },
+        code_departement: { type: "string", description: "Code departement direct (ex: '93', '75', '2A', '971')" },
+      },
+    },
+  },
+  {
+    name: "consulter_insertion_professionnelle",
+    description:
+      "Consulte les indicateurs d'insertion professionnelle des lycees professionnels (InserJeunes). Taux d'emploi a 6/12/18/24 mois apres la sortie, taux de poursuite d'etudes, valeur ajoutee. Detail par formation (CAP, Bac Pro, BTS, Mention complementaire). Recherche par nom d'etablissement, ville, departement ou code UAI. Source : DEPP/DARES via data.education.gouv.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Nom d'etablissement ou mot-cle (ex: 'coiffure', 'automobile')" },
+        uai: { type: "string", description: "Code UAI de l'etablissement (ex: '0691723Y'). Retourne une fiche detaillee avec formations." },
+        ville: { type: "string", description: "Ville de l'etablissement (ex: 'Lyon', 'Marseille')" },
+        code_departement: { type: "string", description: "Code departement (ex: '69', '93', '2A')" },
+        type_diplome: { type: "string", enum: ["CAP", "BAC PRO", "BTS", "MC3", "MC4", "BP"], description: "Filtrer par type de diplome (optionnel)" },
+        limit: { type: "number", description: "Nombre de resultats (1-10, defaut 5)" },
+      },
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -373,6 +404,10 @@ async function executeTool(
       return consulterEvaluationsNationales(args as { commune?: string; code_postal?: string; code_departement?: string; niveau?: "6eme" | "CE2" | "tous"; annee?: number });
     case "consulter_parcoursup":
       return consulterParcoursup(args as { recherche?: string; ville?: string; code_postal?: string; departement?: string; filiere?: string; limit?: number });
+    case "consulter_acces_soins":
+      return consulterAccesSoins(args as { commune?: string; code_postal?: string; code_departement?: string });
+    case "consulter_insertion_professionnelle":
+      return consulterInsertionProfessionnelle(args as { recherche?: string; uai?: string; ville?: string; code_departement?: string; type_diplome?: string; limit?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -428,6 +463,8 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Education : rechercher_etablissement_scolaire (ecoles, colleges, lycees par commune)",
           "   - Resultats lycees : consulter_resultats_lycee (IVAL — taux reussite, VA, mentions par lycee)",
           "   - Parcoursup : consulter_parcoursup (formations, selectivite, profil admis par ville/filiere)",
+          "   - Acces soins : consulter_acces_soins (densite medecins, patientele MT, zones sous-dotees par departement)",
+          "   - Insertion pro : consulter_insertion_professionnelle (InserJeunes — taux emploi/poursuite etudes apres CAP/Bac Pro/BTS)",
           "",
           "PARAMETRES IMPORTANTS :",
           "- Les communes acceptent un nom, un code postal ou un code INSEE.",
