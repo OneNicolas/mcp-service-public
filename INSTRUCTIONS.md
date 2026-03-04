@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.8.0
+- **Version actuelle** : v1.9.1
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -48,6 +48,9 @@ src/
 │   ├── consulter-insertion-professionnelle.ts  # Insertion pro InserJeunes (taux emploi, poursuite etudes lycees pro)
 │   ├── consulter-securite.ts               # Securite/delinquance departementale (SSMSI via data.gouv.fr Tabular)
 │   ├── consulter-risques-naturels.ts       # Risques naturels et technologiques + CatNat (Georisques API v1)
+│   ├── rechercher-texte-legal.ts           # Textes legaux (lois/decrets/arretes) via Legifrance proxy MCP
+│   ├── rechercher-code-juridique.ts        # Articles de codes juridiques via Legifrance proxy MCP
+│   ├── rechercher-jurisprudence.ts         # Jurisprudence judiciaire via Legifrance proxy MCP
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -64,11 +67,13 @@ src/
 │       ├── consulter-acces-soins.test.ts
 │       ├── consulter-insertion-professionnelle.test.ts
 │       ├── consulter-securite.test.ts
-│       └── consulter-risques-naturels.test.ts
+│       ├── consulter-risques-naturels.test.ts
+│       └── rechercher-legifrance.test.ts
 ├── utils/
-│   ├── cache.ts          # cachedFetch avec timeout, retry 1x, FetchError
-│   ├── geo-api.ts        # resolveCodePostal, resolveNomCommune, resolveCodeInsee
-│   └── stats.ts          # Logging appels outils + dashboard
+│   ├── cache.ts              # cachedFetch avec timeout, retry 1x, FetchError
+│   ├── geo-api.ts            # resolveCodePostal, resolveNomCommune, resolveCodeInsee
+│   ├── legifrance-mcp.ts     # Proxy HTTP vers MCP Legifrance (openlegi.fr) — callLegifranceTool
+│   └── stats.ts              # Logging appels outils + dashboard
 ├── admin/
 │   └── dashboard.ts      # Dashboard HTML admin
 ├── parsers/
@@ -85,11 +90,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 23 outils actuels (v1.8.0)
+## Les 26 outils actuels (v1.9.0)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (18 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup, acces soins, insertion pro, securite, risques naturels) |
+| 1 | `rechercher` | Dispatch unifie (21 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup, acces soins, insertion pro, securite, risques naturels, texte_legal, code_juridique, jurisprudence) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -112,6 +117,9 @@ src/
 | 21 | `consulter_insertion_professionnelle` | Insertion pro InserJeunes : taux emploi 6/12/24 mois, poursuite etudes, VA, detail par formation CAP/BacPro/BTS (data.education.gouv.fr) |
 | 22 | `consulter_securite` | Statistiques securite/delinquance departementales : 18 indicateurs SSMSI, taux pour 1000 hab., evolution annuelle (data.gouv.fr Tabular API) |
 | 23 | `consulter_risques_naturels` | Risques naturels et technologiques par commune + arretes CatNat (API Georisques BRGM/MTE) |
+| 24 | `rechercher_texte_legal` | Recherche dans les textes legaux (lois, decrets, arretes, ordonnances) via Legifrance (openlegi.fr) |
+| 25 | `rechercher_code_juridique` | Recherche d'articles dans les codes juridiques francais (Code civil, travail, penal...) via Legifrance |
+| 26 | `rechercher_jurisprudence` | Recherche de jurisprudence judiciaire (Cour de cassation, cours d'appel, tribunaux) via Legifrance |
 
 ## Historique des sprints
 
@@ -208,6 +216,27 @@ src/
 | T54 | Nouveau tool `consulter_risques_naturels` (risques GASPAR + arretes CatNat via API Georisques v1) |
 | T55 | Categories `securite` et `risques_naturels` dans le dispatch `rechercher.ts` (18 categories) |
 | T56 | Enrichir `comparer_communes` avec securite departementale + risques naturels |
+
+### Sprint 16 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T57 | Audit `additional_properties` global — aucune occurrence dans src/ |
+| T58 | Nouveau tool `rechercher_texte_legal` (lois/decrets/arretes via Legifrance proxy MCP openlegi.fr) |
+| T59 | Nouveau tool `rechercher_code_juridique` (Code civil/travail/penal/commerce... via Legifrance) |
+| T60 | Nouveau tool `rechercher_jurisprudence` (Cour de cassation, cours d'appel, tribunaux via Legifrance) |
+| T61 | 3 nouvelles categories dispatch : `texte_legal`, `code_juridique`, `jurisprudence` (21 categories total) |
+| T62 | Version bump v1.9.0 — 26 outils, 21 categories dispatch |
+
+### Sprint 17 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T63 | `LegifranceClient` OAuth2 PISTE — token cache module-level, `/search` multi-fonds, formatters (src/utils/legifrance-client.ts) |
+| T64 | Adapter `rechercher_texte_legal` — fond LODA via API PISTE officielle |
+| T65 | Adapter `rechercher_code_juridique` — fond CODE via API PISTE officielle |
+| T66 | Adapter `rechercher_jurisprudence` — fond JURI/CAPP via API PISTE officielle |
+| T67 | `types.ts` : ajout `PISTE_CLIENT_ID` / `PISTE_CLIENT_SECRET` dans Env |
+| T68 | Tests mis a jour — mock `searchLoda/searchCode/searchJuri` (legifrance-client.ts) |
+| T69 | Version bump v1.9.1 |
 
 ## Contraintes techniques
 

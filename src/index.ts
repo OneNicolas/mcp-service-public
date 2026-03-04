@@ -22,12 +22,15 @@ import { consulterAccesSoins } from "./tools/consulter-acces-soins.js";
 import { consulterInsertionProfessionnelle } from "./tools/consulter-insertion-professionnelle.js";
 import { consulterSecurite } from "./tools/consulter-securite.js";
 import { consulterRisquesNaturels } from "./tools/consulter-risques-naturels.js";
+import { rechercherTexteLegal } from "./tools/rechercher-texte-legal.js";
+import { rechercherCodeJuridique } from "./tools/rechercher-code-juridique.js";
+import { rechercherJurisprudence } from "./tools/rechercher-jurisprudence.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.8.0";
+const VERSION = "1.9.1";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -38,7 +41,7 @@ const TOOLS = [
   {
     name: "rechercher",
     description:
-      "Recherche unifiée intelligente dans les sources service-public.fr. Dispatche automatiquement selon la nature de la question : fiches pratiques DILA (démarches/droits), doctrine fiscale BOFiP, fiscalité locale (taux par commune), transactions immobilières DVF, simulation de taxe foncière, simulation de frais de notaire, zonage immobilier ABC (Pinel, PTZ), simulation d'impôt sur le revenu, conventions collectives, sécurité/délinquance, ou risques naturels. À utiliser en premier si la source appropriée n'est pas évidente.",
+      "Recherche unifiee intelligente dans les sources service-public.fr et Legifrance. Dispatche automatiquement vers : fiches pratiques DILA, doctrine fiscale BOFiP, fiscalite locale, transactions immobilieres DVF, simulation TF/frais notaire/IR, zonage ABC, conventions collectives, securite, risques naturels, textes legaux (lois/decrets/arretes), codes juridiques (Code civil/travail/penal...) et jurisprudence. A utiliser en premier si la source appropriee n'est pas evidente.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -385,6 +388,52 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "rechercher_texte_legal",
+    description:
+      "Recherche dans les textes legislatifs et reglementaires francais (lois, decrets, arretes, ordonnances) par mots-cles. Retourne les textes correspondants avec leur nature, date et lien Legifrance. Source : API Legifrance officielle (PISTE/DILA).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Mots-cles de recherche (ex: 'protection donnees personnelles', 'teletravail conges')" },
+        champ: { type: "string", enum: ["ALL", "TITLE", "ARTICLE", "NUM_ARTICLE"], description: "Champ de recherche (defaut: ALL)" },
+        type_recherche: { type: "string", enum: ["TOUS_LES_MOTS_DANS_UN_CHAMP", "EXACTE", "UN_DES_MOT"], description: "Type de recherche (defaut: TOUS_LES_MOTS_DANS_UN_CHAMP)" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 5)" },
+      },
+      required: ["recherche"],
+    },
+  },
+  {
+    name: "rechercher_code_juridique",
+    description:
+      "Recherche d'articles dans les codes de loi francais (Code civil, Code du travail, Code penal, Code de commerce, etc.). Retourne les articles avec leur numero, contenu et lien Legifrance. Source : API Legifrance officielle (PISTE/DILA).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Termes de recherche (ex: 'contrat de travail', 'legitime defense', 'clause abusive')" },
+        code: { type: "string", description: "Nom complet du code juridique (ex: 'Code civil', 'Code du travail', 'Code penal', 'Code de commerce')" },
+        champ: { type: "string", enum: ["ALL", "TITLE", "ARTICLE", "NUM_ARTICLE"], description: "Champ de recherche (defaut: ALL)" },
+        type_recherche: { type: "string", enum: ["TOUS_LES_MOTS_DANS_UN_CHAMP", "EXACTE", "UN_DES_MOT"], description: "Type de recherche (defaut: TOUS_LES_MOTS_DANS_UN_CHAMP)" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 5)" },
+      },
+      required: ["recherche", "code"],
+    },
+  },
+  {
+    name: "rechercher_jurisprudence",
+    description:
+      "Recherche de jurisprudence judiciaire francaise : arrets de la Cour de cassation et cours d'appel. Retourne les decisions avec juridiction, formation, solution et lien Legifrance. Source : API Legifrance officielle (PISTE/DILA).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Termes de recherche (ex: 'licenciement abusif', 'prejudice moral', 'clause non-concurrence')" },
+        juridiction: { type: "string", enum: ["Cour de cassation", "Cours d'appel", "Toutes"], description: "Filtrer par juridiction (defaut: Toutes)" },
+        publie_bulletin: { type: "boolean", description: "Filtrer les arrets publies au bulletin (Cour de cassation uniquement). Optionnel." },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 5)" },
+      },
+      required: ["recherche"],
+    },
+  },
 ];
 
 // --- Tool execution dispatcher ---
@@ -441,6 +490,12 @@ async function executeTool(
       return consulterSecurite(args as { code_departement?: string; commune?: string; code_postal?: string; annee?: number });
     case "consulter_risques_naturels":
       return consulterRisquesNaturels(args as { commune?: string; code_postal?: string; code_insee?: string });
+    case "rechercher_texte_legal":
+      return rechercherTexteLegal(args as { recherche: string; champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE"; type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOT"; limit?: number }, env);
+    case "rechercher_code_juridique":
+      return rechercherCodeJuridique(args as { recherche: string; code: string; champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE"; type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOT"; limit?: number }, env);
+    case "rechercher_jurisprudence":
+      return rechercherJurisprudence(args as { recherche: string; juridiction?: "Cour de cassation" | "Cours d'appel" | "Toutes"; publie_bulletin?: boolean; limit?: number }, env);
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }

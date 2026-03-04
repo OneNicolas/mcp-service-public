@@ -17,6 +17,9 @@ import { consulterAccesSoins } from "./consulter-acces-soins.js";
 import { consulterInsertionProfessionnelle } from "./consulter-insertion-professionnelle.js";
 import { consulterSecurite } from "./consulter-securite.js";
 import { consulterRisquesNaturels } from "./consulter-risques-naturels.js";
+import { rechercherTexteLegal } from "./rechercher-texte-legal.js";
+import { rechercherCodeJuridique } from "./rechercher-code-juridique.js";
+import { rechercherJurisprudence } from "./rechercher-jurisprudence.js";
 
 interface RechercherArgs {
   query: string;
@@ -41,7 +44,10 @@ export type QueryCategory =
   | "acces_soins"
   | "insertion_pro"
   | "securite"
-  | "risques_naturels";
+  | "risques_naturels"
+  | "texte_legal"
+  | "code_juridique"
+  | "jurisprudence";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -280,6 +286,29 @@ export async function rechercher(
       const loc = codeDept ? { code_departement: codeDept } : communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
       const securiteResult = await consulterSecurite(loc);
       return prefixResult(securiteResult, "\uD83D\uDEE1\uFE0F Securite (SSMSI)");
+    }
+
+    case "texte_legal": {
+      const result = await rechercherTexteLegal({ recherche: query, limit });
+      return prefixResult(result, "\uD83D\uDCDC Textes légaux (Legifrance)");
+    }
+
+    case "code_juridique": {
+      const codeExtrait = extractCodeJuridique(query);
+      const recherche = cleanLegalQuery(query);
+      if (codeExtrait) {
+        const result = await rechercherCodeJuridique({ recherche, code: codeExtrait, limit });
+        return prefixResult(result, "\u2696\uFE0F Code juridique (Legifrance)");
+      }
+      // Pas de code identifié → fallback texte légal
+      const result = await rechercherTexteLegal({ recherche: query, limit });
+      return prefixResult(result, "\u2696\uFE0F Textes légaux (Legifrance)");
+    }
+
+    case "jurisprudence": {
+      const juridiction = extractJuridiction(query);
+      const result = await rechercherJurisprudence({ recherche: query, juridiction: juridiction ?? undefined, limit });
+      return prefixResult(result, "\uD83C\uDFDB\uFE0F Jurisprudence (Legifrance)");
     }
 
     case "risques_naturels": {
@@ -524,6 +553,52 @@ export function classifyQuery(query: string): QueryCategory {
     for (const pattern of educationPatterns) {
       if (pattern.test(q)) return "etablissement_scolaire";
     }
+  }
+
+  // T61 -- Patterns jurisprudence (avant texte legal pour eviter faux positifs)
+  const jurisprudencePatterns = [
+    /\bjurisprudence\b/,
+    /\barret\b.*(cour|cassation|appel|tribunal)/,
+    /\b(cour\s+de\s+cassation|cour\s+d.?appel)\b/,
+    /\btribunal\b.*(instance|grande|commerce|administratif)/,
+    /\bdecision\b.*\b(juge|juridiction|tribunal|cour)\b/,
+    /\b(cass\.?|c\.?civ\.|ch\.?\s+soc)\b/,
+    /\bnumero\s+d.?affaire\b/,
+  ];
+
+  for (const pattern of jurisprudencePatterns) {
+    if (pattern.test(q)) return "jurisprudence";
+  }
+
+  // T61 -- Patterns code juridique
+  const codeJuridiquePatterns = [
+    // "code civil", "code penal", "code du travail", "code de commerce"...
+    /\bcode\s+(?:du\s+|de\s+)?(?:civil|penal|travail|commerce|consommation|urbanisme|environnement|education)\b/,
+    /\bcode\s+(?:de\s+(?:la\s+|l[''\s])?)(securite|procedure\s+civile|procedure\s+penale|sante|justice|route)\b/,
+    /\bcode\s+(?:general\s+des?\s+)?impots?\b/,
+    /\barticle\s+[LRD]\s*[\d-]+\b/,
+    /\bart\.?\s+[LRD]\s*[\d-]+\b/,
+    /\bcode\s+(cgct|cgppp|cgi)\b/,
+  ];
+
+  for (const pattern of codeJuridiquePatterns) {
+    if (pattern.test(q)) return "code_juridique";
+  }
+
+  // T61 -- Patterns texte legal (lois, decrets, arretes)
+  // Note : \b ne fonctionne pas apres ° (caractere non-mot) — on utilise (?=\s|$|\d) a la place
+  const texteLegalPatterns = [
+    /\bloi\s+n[o°]/,
+    /\bloi\s+(du|de\s+finance|organique)\b/,
+    /\bdecret\s+(?:n[o°]|du|d.?application|d.?execution)\b/,
+    /\barrete\s+(?:du|ministeriel|prefectoral)\b/,
+    /\bordonnance\s+(?:n[o°]|du)\b/,
+    /\b(?:texte\s+legal|texte\s+legislatif|texte\s+reglementaire)\b/,
+    /\barticle\s+de\s+loi\b/,
+  ];
+
+  for (const pattern of texteLegalPatterns) {
+    if (pattern.test(q)) return "texte_legal";
   }
 
   // T24 -- Patterns simulation IR
@@ -864,6 +939,51 @@ export function extractFiliereParcoursup(query: string): string | null {
 function parseNumberFr(raw: string): number {
   const cleaned = raw.replace(/[\s.,]/g, "");
   return parseInt(cleaned, 10) || 0;
+}
+
+/** T61 -- Extrait le nom du code juridique depuis la query */
+export function extractCodeJuridique(query: string): string | null {
+  const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const codeMap: Record<string, string> = {
+    "civil": "Code civil",
+    "penal": "Code penal",
+    "travail": "Code du travail",
+    "commerce": "Code de commerce",
+    "consommation": "Code de la consommation",
+    "urbanisme": "Code de l'urbanisme",
+    "environnement": "Code de l'environnement",
+    "education": "Code de l'education",
+    "securite sociale": "Code de la securite sociale",
+    "cgi": "Code general des impots",
+    "impots": "Code general des impots",
+    "procedure civile": "Code de procedure civile",
+    "procedure penale": "Code de procedure penale",
+    "sante publique": "Code de la sante publique",
+  };
+
+  for (const [key, value] of Object.entries(codeMap)) {
+    if (q.includes(key)) return value;
+  }
+  return null;
+}
+
+/** T61 -- Nettoie une query des termes de navigation legale pour la recherche textuelle */
+export function cleanLegalQuery(query: string): string {
+  return query
+    .replace(/\b(code|civil|penal|du\s+travail|de\s+commerce|juridique|article|texte|legal)\b/gi, "")
+    .replace(/\b(loi|decret|arrete|ordonnance|du|de|la|les|des|un|une)\b/gi, "")
+    .trim()
+    || query.trim();
+}
+
+/** T61 -- Extrait la juridiction depuis la query */
+export function extractJuridiction(
+  query: string,
+): "Cour de cassation" | "Cours d'appel" | "Toutes" | null {
+  const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/cour\s+de\s+cassation/.test(q)) return "Cour de cassation";
+  if (/cour\s+d.?appel|juridictions?\s+d.?appel/.test(q)) return "Cours d'appel";
+  return null;
 }
 
 function prefixResult(result: ToolResult, sourceLabel: string): ToolResult {

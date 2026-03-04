@@ -659,3 +659,48 @@ describe("classifyQuery -- risques_naturels", () => {
     expect(classifyQuery("prix immobilier a Nimes")).toBe("transactions_dvf");
   });
 });
+
+// T61 -- jurisprudence dispatch
+describe("classifyQuery -- jurisprudence", () => {
+  it("route les requetes jurisprudence", () => {
+    expect(classifyQuery("jurisprudence licenciement abusif")).toBe("jurisprudence");
+    expect(classifyQuery("arret cour de cassation contrat")).toBe("jurisprudence");
+    expect(classifyQuery("cour d'appel Paris expulsion")).toBe("jurisprudence");
+    expect(classifyQuery("tribunal de commerce liquidation")).toBe("jurisprudence");
+  });
+
+  it("ne confond pas avec d'autres categories", () => {
+    expect(classifyQuery("prix immobilier Paris")).toBe("transactions_dvf");
+    expect(classifyQuery("convention collective batiment")).toBe("convention_collective");
+  });
+});
+
+// T61 -- code juridique dispatch
+describe("classifyQuery -- code_juridique", () => {
+  it("route les requetes code juridique", () => {
+    expect(classifyQuery("code civil article 1242")).toBe("code_juridique");
+    expect(classifyQuery("code du travail conge")).toBe("code_juridique");
+    expect(classifyQuery("code penal vol qualifie")).toBe("code_juridique");
+    expect(classifyQuery("article L1237-19 code du travail")).toBe("code_juridique");
+  });
+
+  it("ne confond pas avec d'autres categories", () => {
+    expect(classifyQuery("jurisprudence cour de cassation travail")).toBe("jurisprudence");
+  });
+});
+
+// T61 -- texte legal dispatch
+describe("classifyQuery -- texte_legal", () => {
+  it("route les requetes texte legal", () => {
+    expect(classifyQuery("loi n° 78-17 informatique libertes")).toBe("texte_legal");
+    expect(classifyQuery("decret d'application teletravail")).toBe("texte_legal");
+    expect(classifyQuery("arrete ministeriel vaccination")).toBe("texte_legal");
+    expect(classifyQuery("ordonnance du 27 mars 2020")).toBe("texte_legal");
+    expect(classifyQuery("texte legislatif protection donnees")).toBe("texte_legal");
+  });
+
+  it("ne confond pas avec d'autres categories", () => {
+    expect(classifyQuery("code civil responsabilite")).toBe("code_juridique");
+    expect(classifyQuery("jurisprudence cour cassation")).toBe("jurisprudence");
+  });
+});

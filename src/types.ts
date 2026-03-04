@@ -2,6 +2,9 @@
 export interface Env {
   DB: D1Database;
   ADMIN_SECRET: string;
+  /** Credentials OAuth2 PISTE pour l'API Legifrance officielle */
+  PISTE_CLIENT_ID: string;
+  PISTE_CLIENT_SECRET: string;
 }
 
 /** Fiche pratique stored in D1 */
