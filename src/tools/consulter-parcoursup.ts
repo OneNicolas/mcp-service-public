@@ -3,7 +3,7 @@ import { resolveCodePostal } from "../utils/geo-api.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 const EDUCATION_API = "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets";
-const DATASET_PARCOURSUP = "fr-esr-parcoursup@mesr";
+const DATASET_PARCOURSUP = "fr-esr-parcoursup";
 
 interface ConsulterParcoursupArgs {
   recherche?: string;
@@ -48,7 +48,7 @@ interface FormationRecord {
 
 interface ExploreResponse {
   total_count: number;
-  results: Array<{ additional_properties: FormationRecord }>;
+  results: Array<FormationRecord>;
 }
 
 /** Champs selectionnes pour limiter la taille de la reponse */
@@ -171,12 +171,12 @@ export async function consulterParcoursup(
       };
     }
 
-    const formations = data.results.map((r) => r.additional_properties);
+    const formations = data.results;
     const formatted = formations.map(formatFormation);
 
     const criteres = buildCriteresLabel(args);
     const header = `**${data.total_count} formation(s) Parcoursup** trouvee(s) pour : ${criteres} (${formatted.length} affichee(s))\n`;
-    const footer = "\n\n_Source : Parcoursup (session la plus recente) via data.education.gouv.fr — Donnees indicatives, consulter parcoursup.fr pour les informations officielles._";
+    const footer = "\n\n_Source : Parcoursup (session la plus recente) via data.education.gouv.fr \u2014 Donnees indicatives, consulter parcoursup.fr pour les informations officielles._";
 
     return {
       content: [{ type: "text", text: header + "\n---\n" + formatted.join("\n---\n") + footer }],

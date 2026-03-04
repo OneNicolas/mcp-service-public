@@ -48,7 +48,7 @@ interface IvalRecord {
 
 interface ExploreResponse {
   total_count: number;
-  results: Array<{ additional_properties: IvalRecord }>;
+  results: Array<IvalRecord>;
 }
 
 export async function consulterResultatsLycee(
@@ -101,13 +101,13 @@ export async function consulterResultatsLycee(
 
     if (gtResults?.results?.length) {
       for (const r of gtResults.results) {
-        allResults.push({ record: r.additional_properties, voie: "General/Technologique" });
+        allResults.push({ record: r, voie: "General/Technologique" });
       }
     }
 
     if (proResults?.results?.length) {
       for (const r of proResults.results) {
-        allResults.push({ record: r.additional_properties, voie: "Professionnel" });
+        allResults.push({ record: r, voie: "Professionnel" });
       }
     }
 
@@ -137,7 +137,7 @@ export async function consulterResultatsLycee(
         type: "text",
         text: [
           `**${totalCount} resultat(s) IVAL${locationLabel}** (${limited.length} affiches, derniere session disponible)\n`,
-          "💡 _La valeur ajoutee (VA) mesure l'apport propre du lycee : positive = meilleur que prevu, negative = en-dessous des attendus._\n",
+          "\uD83D\uDCA1 _La valeur ajoutee (VA) mesure l'apport propre du lycee : positive = meilleur que prevu, negative = en-dessous des attendus._\n",
           ...formatted,
         ].join("\n---\n"),
       }],
@@ -203,7 +203,7 @@ async function fetchEvolutionIval(
   ]) {
     if (!results?.results?.length) continue;
     for (const r of results.results) {
-      const rec = r.additional_properties;
+      const rec = r;
       const key = `${rec.uai ?? "?"}-${voie}`;
       if (!byLycee.has(key)) {
         byLycee.set(key, {
@@ -255,7 +255,7 @@ async function fetchEvolutionIval(
     sections.push(lines.join("\n"));
   }
 
-  const header = "**Historique IVAL — Evolution multi-annees**\n";
+  const header = "**Historique IVAL \u2014 Evolution multi-annees**\n";
   const hint = "\n\n\uD83D\uDCA1 _La valeur ajoutee (VA) mesure l'apport propre du lycee. Sessions 2012-2024._";
   const footer = "\n_Source : IVAL DEPP via data.education.gouv.fr_";
 
@@ -298,7 +298,7 @@ function formatResultat(r: IvalRecord, voie: string): string {
 
   // Titre
   const nom = r.libelle_uai ?? "Lycee";
-  const secteur = r.secteur === "public" ? "🟢 Public" : "🔵 Prive";
+  const secteur = r.secteur === "public" ? "\uD83D\uDFE2 Public" : "\uD83D\uDD35 Prive";
   sections.push(`## ${nom} (${secteur})`);
 
   // Localisation et session
@@ -316,10 +316,10 @@ function formatResultat(r: IvalRecord, voie: string): string {
     sections.push(`**Taux de reussite** : ${r.taux_reu_total} %${vaStr}`);
   }
 
-  // Taux d'acces 2nde→bac + VA
+  // Taux d'acces 2nde->bac + VA
   if (r.taux_acces_2nde != null) {
     const vaStr = formatVA(r.va_acces_2nde);
-    sections.push(`**Taux d'acces 2nde→bac** : ${r.taux_acces_2nde} %${vaStr}`);
+    sections.push(`**Taux d'acces 2nde->bac** : ${r.taux_acces_2nde} %${vaStr}`);
   }
 
   // Taux de mentions + VA
@@ -346,6 +346,6 @@ function formatResultat(r: IvalRecord, voie: string): string {
 export function formatVA(va: number | null | undefined): string {
   if (va == null) return "";
   const sign = va > 0 ? "+" : "";
-  const emoji = va > 0 ? " 📈" : va < 0 ? " 📉" : " ➡️";
+  const emoji = va > 0 ? " \uD83D\uDCC8" : va < 0 ? " \uD83D\uDCC9" : " \u27A1\uFE0F";
   return ` (VA : ${sign}${va}${emoji})`;
 }
