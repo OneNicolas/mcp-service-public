@@ -289,7 +289,7 @@ export async function rechercher(
     }
 
     case "texte_legal": {
-      const result = await rechercherTexteLegal({ recherche: query, limit });
+      const result = await rechercherTexteLegal({ recherche: query, limit }, env);
       return prefixResult(result, "\uD83D\uDCDC Textes légaux (Legifrance)");
     }
 
@@ -297,17 +297,17 @@ export async function rechercher(
       const codeExtrait = extractCodeJuridique(query);
       const recherche = cleanLegalQuery(query);
       if (codeExtrait) {
-        const result = await rechercherCodeJuridique({ recherche, code: codeExtrait, limit });
+        const result = await rechercherCodeJuridique({ recherche, code: codeExtrait, limit }, env);
         return prefixResult(result, "\u2696\uFE0F Code juridique (Legifrance)");
       }
       // Pas de code identifié → fallback texte légal
-      const result = await rechercherTexteLegal({ recherche: query, limit });
+      const result = await rechercherTexteLegal({ recherche: query, limit }, env);
       return prefixResult(result, "\u2696\uFE0F Textes légaux (Legifrance)");
     }
 
     case "jurisprudence": {
       const juridiction = extractJuridiction(query);
-      const result = await rechercherJurisprudence({ recherche: query, juridiction: juridiction ?? undefined, limit });
+      const result = await rechercherJurisprudence({ recherche: query, juridiction: juridiction ?? undefined, limit }, env);
       return prefixResult(result, "\uD83C\uDFDB\uFE0F Jurisprudence (Legifrance)");
     }
 
