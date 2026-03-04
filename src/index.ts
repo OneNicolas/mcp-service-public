@@ -813,6 +813,20 @@ export default {
       }
     }
 
+    // Reset stats dashboard
+    if (url.pathname === "/admin/stats" && request.method === "DELETE") {
+      const token = request.headers.get("Authorization")?.replace("Bearer ", "");
+      if (!env.ADMIN_SECRET || token !== env.ADMIN_SECRET) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      try {
+        const result = await env.DB.prepare("DELETE FROM tool_stats").run();
+        return Response.json({ deleted: result.meta?.changes ?? 0, message: "Stats reset" });
+      } catch (e) {
+        return Response.json({ error: e instanceof Error ? e.message : "unknown" }, { status: 500 });
+      }
+    }
+
     // T19 — OpenAPI spec (public, pas d'auth)
     if ((url.pathname === "/openapi.json" || url.pathname === "/openapi") && request.method === "GET") {
       const spec = generateOpenAPISpec(TOOLS, VERSION);
