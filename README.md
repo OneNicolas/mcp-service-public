@@ -1,12 +1,12 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.8.0-blue)
+![Version](https://img.shields.io/badge/version-1.9.1-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-23-blueviolet)
-![Tests](https://img.shields.io/badge/tests-350%2B%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-26-blueviolet)
+![Tests](https://img.shields.io/badge/tests-399%20passing-brightgreen)
 
-Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques), aux textes legaux Legifrance (lois, decrets, codes juridiques, jurisprudence) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
 ## Installation
 
@@ -71,13 +71,13 @@ Apres connexion, testez avec une requete simple :
 Recherche : renouveler passeport
 ```
 
-Si les 23 outils sont charges, le serveur est pret.
+Si les 26 outils sont charges, le serveur est pret.
 
-## Les 23 outils MCP (v1.8.0)
+## Les 26 outils MCP (v1.9.1)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
-| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (18 categories) |
+| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (21 categories) |
 | 2 | `rechercher_fiche` | DILA / service-public.fr | Recherche plein texte dans ~5 500 fiches pratiques |
 | 3 | `lire_fiche` | DILA / service-public.fr | Lecture complete d'une fiche par identifiant (F14929, N360...) |
 | 4 | `rechercher_service_local` | API Annuaire | Services publics locaux (mairie, prefecture, CAF...) |
@@ -100,6 +100,9 @@ Si les 23 outils sont charges, le serveur est pret.
 | 21 | `consulter_insertion_professionnelle` | DEPP-DARES / data.education.gouv.fr | Insertion pro InserJeunes : taux emploi 6/12/24 mois, poursuite etudes, VA par formation |
 | 22 | `consulter_securite` | SSMSI / data.gouv.fr | Statistiques securite/delinquance departementales : cambriolages, vols, violences, taux/1000 hab. |
 | 23 | `consulter_risques_naturels` | BRGM-MTE / georisques.gouv.fr | Risques naturels et technologiques par commune + arretes CatNat |
+| 24 | `rechercher_texte_legal` | DILA / API PISTE Legifrance | Textes legislatifs et reglementaires (lois, decrets, arretes, ordonnances) |
+| 25 | `rechercher_code_juridique` | DILA / API PISTE Legifrance | Articles dans les codes juridiques (Code civil, travail, penal, commerce...) |
+| 26 | `rechercher_jurisprudence` | DILA / API PISTE Legifrance | Jurisprudence judiciaire (Cour de cassation, cours d'appel) |
 
 ## Exemples d'appels
 
@@ -192,6 +195,26 @@ Si les 23 outils sont charges, le serveur est pret.
 { "name": "consulter_risques_naturels", "arguments": { "code_insee": "75056" } }
 ```
 
+### Textes legaux (Legifrance)
+```json
+{ "name": "rechercher_texte_legal", "arguments": { "recherche": "protection donnees personnelles" } }
+{ "name": "rechercher_texte_legal", "arguments": { "recherche": "teletravail", "champ": "TITLE" } }
+```
+
+### Codes juridiques (Legifrance)
+```json
+{ "name": "rechercher_code_juridique", "arguments": { "recherche": "contrat de travail", "code": "Code du travail" } }
+{ "name": "rechercher_code_juridique", "arguments": { "recherche": "legitime defense", "code": "Code penal" } }
+{ "name": "rechercher_code_juridique", "arguments": { "recherche": "1242", "code": "Code civil", "champ": "NUM_ARTICLE" } }
+```
+
+### Jurisprudence (Legifrance)
+```json
+{ "name": "rechercher_jurisprudence", "arguments": { "recherche": "licenciement abusif" } }
+{ "name": "rechercher_jurisprudence", "arguments": { "recherche": "clause abusive", "juridiction": "Cour de cassation", "publie_bulletin": true } }
+{ "name": "rechercher_jurisprudence", "arguments": { "recherche": "prejudice moral", "juridiction": "Cours d'appel" } }
+```
+
 ### Consulter le zonage ABC
 ```json
 { "name": "consulter_zonage_immobilier", "arguments": { "commune": "Bordeaux" } }
@@ -281,6 +304,7 @@ Cloudflare Workers (plan payant)
 |   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees + Evaluations nationales + Parcoursup + InserJeunes
 |   +-- georisques.gouv.fr -> Risques naturels GASPAR + Arretes CatNat
 |   +-- data.ameli.fr -> Acces aux soins (effectifs, densite, patientele MT)
+|   +-- api.piste.gouv.fr -> Legifrance (textes legaux, codes juridiques, jurisprudence)
 |   +-- geo.api.gouv.fr -> Resolution communes
 |   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
 |   +-- API Annuaire -> services publics locaux
@@ -300,6 +324,7 @@ Cloudflare Workers (plan payant)
 | data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees, evaluations nationales 6eme/CE2, formations Parcoursup, insertion pro InserJeunes |
 | georisques.gouv.fr | Proxy temps reel (API v1 GASPAR) | Risques naturels et technologiques par commune, arretes de catastrophe naturelle (CatNat) |
 | data.ameli.fr | Proxy temps reel | Acces aux soins : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees |
+| api.piste.gouv.fr (DILA) | Proxy temps reel (OAuth2) | Legifrance : textes legaux (LODA), codes juridiques (CODE), jurisprudence (JURI/CAPP) |
 
 ### Endpoints
 
@@ -319,7 +344,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (320+ tests)
+npx vitest run       # Tests unitaires (399 tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```
