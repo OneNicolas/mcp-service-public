@@ -48,9 +48,17 @@ export async function rechercher(
   args: RechercherArgs,
   env: Env,
 ): Promise<ToolResult> {
-  const { query, limit = 5 } = args;
+  // Normalise query en string (protege contre les tableaux/objets envoyes par certains clients MCP)
+  const rawQuery = args.query;
+  const query = (typeof rawQuery === "string"
+    ? rawQuery
+    : Array.isArray(rawQuery)
+      ? (rawQuery as unknown as string[]).join(" ")
+      : String(rawQuery ?? "")
+  ).trim();
+  const { limit = 5 } = args;
 
-  if (!query || query.trim().length < 2) {
+  if (!query || query.length < 2) {
     return {
       content: [{ type: "text", text: "Veuillez fournir une question ou des termes de recherche." }],
       isError: true,
@@ -187,7 +195,12 @@ export async function rechercher(
       const communeName = extractCommuneName(query);
       const codePostal = extractCodePostal(query);
       const typeEtab = extractTypeEtablissement(query);
-      const loc = communeName ? { commune: communeName } : codePostal ? { code_postal: codePostal } : {};
+      // Ne pas appeler le tool sans localisation : evite les erreurs de validation isError
+      if (!communeName && !codePostal) {
+        const result = await rechercherFiche({ query, limit }, env);
+        return prefixResult(result, "\uD83D\uDCCB Fiches pratiques (precisez une commune pour rechercher des etablissements scolaires via `rechercher_etablissement_scolaire`)");
+      }
+      const loc = communeName ? { commune: communeName } : { code_postal: codePostal! };
       const result = await rechercherEtablissementScolaire({ ...loc, type: typeEtab ?? undefined, limit });
       return prefixResult(result, "\uD83C\uDFEB Etablissements scolaires");
     }
