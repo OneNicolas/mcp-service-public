@@ -1,12 +1,12 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.9.1-blue)
+![Version](https://img.shields.io/badge/version-1.10.0-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-26-blueviolet)
-![Tests](https://img.shields.io/badge/tests-399%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-28-blueviolet)
+![Tests](https://img.shields.io/badge/tests-421%20passing-brightgreen)
 
-Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques), aux textes legaux Legifrance (lois, decrets, codes juridiques, jurisprudence) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
+Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques), aux textes legaux Legifrance (lois, decrets, codes juridiques, jurisprudence), au Journal Officiel (JORF), aux statistiques d'aide sociale CAF (RSA/APL/AAH) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
 ## Installation
 
@@ -71,13 +71,13 @@ Apres connexion, testez avec une requete simple :
 Recherche : renouveler passeport
 ```
 
-Si les 26 outils sont charges, le serveur est pret.
+Si les 28 outils sont charges, le serveur est pret.
 
-## Les 26 outils MCP (v1.9.1)
+## Les 28 outils MCP (v1.10.0)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
-| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (21 categories) |
+| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (23 categories) |
 | 2 | `rechercher_fiche` | DILA / service-public.fr | Recherche plein texte dans ~5 500 fiches pratiques |
 | 3 | `lire_fiche` | DILA / service-public.fr | Lecture complete d'une fiche par identifiant (F14929, N360...) |
 | 4 | `rechercher_service_local` | API Annuaire | Services publics locaux (mairie, prefecture, CAF...) |
@@ -103,6 +103,8 @@ Si les 26 outils sont charges, le serveur est pret.
 | 24 | `rechercher_texte_legal` | DILA / API PISTE Legifrance | Textes legislatifs et reglementaires (lois, decrets, arretes, ordonnances) |
 | 25 | `rechercher_code_juridique` | DILA / API PISTE Legifrance | Articles dans les codes juridiques (Code civil, travail, penal, commerce...) |
 | 26 | `rechercher_jurisprudence` | DILA / API PISTE Legifrance | Jurisprudence judiciaire (Cour de cassation, cours d'appel) |
+| 27 | `consulter_journal_officiel` | DILA / API PISTE Legifrance | Recherche dans le Journal Officiel (JORF) : lois, decrets, arretes, ordonnances — filtre par type et plage de dates |
+| 28 | `consulter_aide_sociale` | CNAF / data.caf.fr | Statistiques allocataires CAF par commune ou departement : RSA, APL/ALS/ALF, AAH, allocations familiales, prime d'activite... |
 
 ## Exemples d'appels
 
@@ -215,6 +217,20 @@ Si les 26 outils sont charges, le serveur est pret.
 { "name": "rechercher_jurisprudence", "arguments": { "recherche": "prejudice moral", "juridiction": "Cours d'appel" } }
 ```
 
+### Journal Officiel (JORF)
+```json
+{ "name": "consulter_journal_officiel", "arguments": { "recherche": "teletravail" } }
+{ "name": "consulter_journal_officiel", "arguments": { "recherche": "loi finances", "type_texte": "LOI", "date_debut": "2024-01-01", "date_fin": "2024-12-31" } }
+{ "name": "consulter_journal_officiel", "arguments": { "recherche": "protection donnees", "type_texte": "DECRET", "limit": 10 } }
+```
+
+### Aide sociale — statistiques CAF
+```json
+{ "name": "consulter_aide_sociale", "arguments": { "commune": "Bondy" } }
+{ "name": "consulter_aide_sociale", "arguments": { "code_departement": "93" } }
+{ "name": "consulter_aide_sociale", "arguments": { "code_postal": "93140", "prestation": "RSA" } }
+```
+
 ### Consulter le zonage ABC
 ```json
 { "name": "consulter_zonage_immobilier", "arguments": { "commune": "Bordeaux" } }
@@ -304,7 +320,8 @@ Cloudflare Workers (plan payant)
 |   +-- data.education.gouv.fr -> Annuaire etablissements + IVAL lycees + Evaluations nationales + Parcoursup + InserJeunes
 |   +-- georisques.gouv.fr -> Risques naturels GASPAR + Arretes CatNat
 |   +-- data.ameli.fr -> Acces aux soins (effectifs, densite, patientele MT)
-|   +-- api.piste.gouv.fr -> Legifrance (textes legaux, codes juridiques, jurisprudence)
+|   +-- api.piste.gouv.fr -> Legifrance (textes legaux, codes juridiques, jurisprudence, JORF)
+|   +-- data.caf.fr -> Statistiques CAF allocataires (RSA, APL, AAH, AF, prime d'activite)
 |   +-- geo.api.gouv.fr -> Resolution communes
 |   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
 |   +-- API Annuaire -> services publics locaux
@@ -324,7 +341,8 @@ Cloudflare Workers (plan payant)
 | data.education.gouv.fr | Proxy temps reel | Annuaire etablissements scolaires, IVAL lycees, evaluations nationales 6eme/CE2, formations Parcoursup, insertion pro InserJeunes |
 | georisques.gouv.fr | Proxy temps reel (API v1 GASPAR) | Risques naturels et technologiques par commune, arretes de catastrophe naturelle (CatNat) |
 | data.ameli.fr | Proxy temps reel | Acces aux soins : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees |
-| api.piste.gouv.fr (DILA) | Proxy temps reel (OAuth2) | Legifrance : textes legaux (LODA), codes juridiques (CODE), jurisprudence (JURI/CAPP) |
+| api.piste.gouv.fr (DILA) | Proxy temps reel (OAuth2) | Legifrance : textes legaux (LODA), codes juridiques (CODE), jurisprudence (JURI/CAPP), Journal Officiel (JORF) |
+| data.caf.fr (CNAF) | Proxy temps reel | Statistiques allocataires CAF par commune/departement : RSA, APL/ALS/ALF, AAH, AF, prime d'activite... |
 
 ### Endpoints
 
@@ -344,7 +362,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (399 tests)
+npx vitest run       # Tests unitaires (421 tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```
