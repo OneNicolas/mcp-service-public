@@ -1,10 +1,10 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.10.0-blue)
+![Version](https://img.shields.io/badge/version-1.11.0-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-28-blueviolet)
-![Tests](https://img.shields.io/badge/tests-421%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-30-blueviolet)
+![Tests](https://img.shields.io/badge/tests-459%20passing-brightgreen)
 
 Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques), aux textes legaux Legifrance (lois, decrets, codes juridiques, jurisprudence), au Journal Officiel (JORF), aux statistiques d'aide sociale CAF (RSA/APL/AAH) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
@@ -71,9 +71,9 @@ Apres connexion, testez avec une requete simple :
 Recherche : renouveler passeport
 ```
 
-Si les 28 outils sont charges, le serveur est pret.
+Si les 30 outils sont charges, le serveur est pret.
 
-## Les 28 outils MCP (v1.10.0)
+## Les 30 outils MCP (v1.11.0)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
@@ -105,6 +105,8 @@ Si les 28 outils sont charges, le serveur est pret.
 | 26 | `rechercher_jurisprudence` | DILA / API PISTE Legifrance | Jurisprudence judiciaire (Cour de cassation, cours d'appel) |
 | 27 | `consulter_journal_officiel` | DILA / API PISTE Legifrance | Recherche dans le Journal Officiel (JORF) : lois, decrets, arretes, ordonnances — filtre par type et plage de dates |
 | 28 | `consulter_aide_sociale` | CNAF / data.caf.fr | Statistiques allocataires CAF par commune ou departement : RSA, APL/ALS/ALF, AAH, allocations familiales, prime d'activite... |
+| 29 | `rechercher_marche_public` | DILA / boamp-datadila.opendatasoft.com | Avis marches publics BOAMP : appels d'offres, attributions, MAPA, DSP — filtre type/dept/acheteur/dates |
+| 30 | `rechercher_annonce_legale` | DILA / bodacc-datadila.opendatasoft.com | Annonces legales BODACC : immatriculations, radiations, cessions, procedures collectives — filtre SIREN/nom/type/dept |
 
 ## Exemples d'appels
 
@@ -231,6 +233,20 @@ Si les 28 outils sont charges, le serveur est pret.
 { "name": "consulter_aide_sociale", "arguments": { "code_postal": "93140", "prestation": "RSA" } }
 ```
 
+### Marches publics (BOAMP)
+```json
+{ "name": "rechercher_marche_public", "arguments": { "recherche": "travaux voirie", "departement": "35" } }
+{ "name": "rechercher_marche_public", "arguments": { "type_avis": "AAC", "departement": "75" } }
+{ "name": "rechercher_marche_public", "arguments": { "acheteur": "Departement du Rhone", "type_avis": "APC" } }
+```
+
+### Annonces legales (BODACC)
+```json
+{ "name": "rechercher_annonce_legale", "arguments": { "siren": "123456789" } }
+{ "name": "rechercher_annonce_legale", "arguments": { "nom_entreprise": "SARL Martin" } }
+{ "name": "rechercher_annonce_legale", "arguments": { "type_annonce": "procedure_collective", "departement": "69" } }
+```
+
 ### Consulter le zonage ABC
 ```json
 { "name": "consulter_zonage_immobilier", "arguments": { "commune": "Bordeaux" } }
@@ -322,6 +338,8 @@ Cloudflare Workers (plan payant)
 |   +-- data.ameli.fr -> Acces aux soins (effectifs, densite, patientele MT)
 |   +-- api.piste.gouv.fr -> Legifrance (textes legaux, codes juridiques, jurisprudence, JORF)
 |   +-- data.caf.fr -> Statistiques CAF allocataires (RSA, APL, AAH, AF, prime d'activite)
+|   +-- boamp-datadila.opendatasoft.com -> Marches publics BOAMP (appels d'offres, attributions, MAPA, DSP)
+|   +-- bodacc-datadila.opendatasoft.com -> Annonces legales BODACC (immatriculations, radiations, cessions, procedures collectives)
 |   +-- geo.api.gouv.fr -> Resolution communes
 |   +-- recherche-entreprises.api.gouv.fr -> Fiche entreprise
 |   +-- API Annuaire -> services publics locaux
@@ -343,6 +361,8 @@ Cloudflare Workers (plan payant)
 | data.ameli.fr | Proxy temps reel | Acces aux soins : effectifs/densite medecins, patientele MT, primo-installations, zones sous-dotees |
 | api.piste.gouv.fr (DILA) | Proxy temps reel (OAuth2) | Legifrance : textes legaux (LODA), codes juridiques (CODE), jurisprudence (JURI/CAPP), Journal Officiel (JORF) |
 | data.caf.fr (CNAF) | Proxy temps reel | Statistiques allocataires CAF par commune/departement : RSA, APL/ALS/ALF, AAH, AF, prime d'activite... |
+| boamp-datadila.opendatasoft.com (DILA) | Proxy temps reel (Opendatasoft v2.1) | Marches publics BOAMP : appels d'offres, attributions, MAPA, DSP — mise a jour quotidienne |
+| bodacc-datadila.opendatasoft.com (DILA) | Proxy temps reel (Opendatasoft v2.1) | Annonces legales BODACC : immatriculations, radiations, cessions, procedures collectives |
 
 ### Endpoints
 
@@ -362,7 +382,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (421 tests)
+npx vitest run       # Tests unitaires (459 tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```
