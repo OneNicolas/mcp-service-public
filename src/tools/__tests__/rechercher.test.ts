@@ -738,6 +738,43 @@ describe("classifyQuery -- texte_legal", () => {
   });
 });
 
+// T73 -- classifyQuery : marche_public
+describe("classifyQuery -- marche_public", () => {
+  it("detecte les marches publics", () => {
+    expect(classifyQuery("marche public travaux")).toBe("marche_public");
+    expect(classifyQuery("appel d'offres informatique")).toBe("marche_public");
+    expect(classifyQuery("MAPA fournitures bureau")).toBe("marche_public");
+    expect(classifyQuery("avis d'attribution marche")).toBe("marche_public");
+    expect(classifyQuery("BOAMP departement 75")).toBe("marche_public");
+    expect(classifyQuery("delegation de service public transport")).toBe("marche_public");
+    expect(classifyQuery("commande publique nettoyage")).toBe("marche_public");
+  });
+
+  it("ne confond pas avec recherche fiche", () => {
+    expect(classifyQuery("comment se passe un contrat de travail")).not.toBe("marche_public");
+    expect(classifyQuery("marche alimentaire Lyon")).not.toBe("marche_public");
+  });
+});
+
+// T80 -- classifyQuery : annonce_legale
+describe("classifyQuery -- annonce_legale", () => {
+  it("detecte les annonces BODACC", () => {
+    expect(classifyQuery("BODACC liquidation judiciaire")).toBe("annonce_legale");
+    expect(classifyQuery("annonce legale entreprise")).toBe("annonce_legale");
+    expect(classifyQuery("procedure collective SAS Martin")).toBe("annonce_legale");
+    expect(classifyQuery("redressement judiciaire SARL")).toBe("annonce_legale");
+    expect(classifyQuery("liquidation judiciaire boutique Paris")).toBe("annonce_legale");
+    expect(classifyQuery("radiation RCS entreprise")).toBe("annonce_legale");
+    expect(classifyQuery("cessation de paiement")).toBe("annonce_legale");
+    expect(classifyQuery("cession d'entreprise SARL")).toBe("annonce_legale");
+  });
+
+  it("ne confond pas avec autre chose", () => {
+    expect(classifyQuery("comment creer une societe")).not.toBe("annonce_legale");
+    expect(classifyQuery("radiation fiscale")).not.toBe("annonce_legale");
+  });
+});
+
 // T72 -- extractTypeTexteJorf
 describe("extractTypeTexteJorf", () => {
   it("detecte LOI", () => {

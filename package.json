@@ -1,7 +1,7 @@
 {
   "name": "mcp-service-public",
-  "version": "1.10.0",
-  "description": "MCP Server for French service-public.fr — 28 outils : fiches pratiques, fiscalite, DVF, simulateurs IR/TF/notaire, education, Parcoursup, acces soins, securite, risques naturels, Legifrance (JORF, lois, codes, jurisprudence), aide sociale CAF",
+  "version": "1.11.0",
+  "description": "MCP Server for French service-public.fr — 30 outils : fiches pratiques, fiscalite, DVF, simulateurs IR/TF/notaire, education, Parcoursup, acces soins, securite, risques naturels, Legifrance (JORF, lois, codes, jurisprudence), aide sociale CAF, BOAMP, BODACC",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.10.0
+- **Version actuelle** : v1.11.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -92,7 +92,7 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 28 outils actuels (v1.10.0)
+## Les 30 outils actuels (v1.11.0)
 
 | # | Outil | Description |
 |---|---|---|
@@ -124,6 +124,8 @@ src/
 | 26 | `rechercher_jurisprudence` | Recherche de jurisprudence judiciaire (Cour de cassation, cours d'appel, tribunaux) via Legifrance |
 | 27 | `consulter_journal_officiel` | Recherche dans le Journal Officiel (JORF) : lois, decrets, arretes, ordonnances, nominations — filtre type/dates (API PISTE DILA) |
 | 28 | `consulter_aide_sociale` | Statistiques CAF par commune ou departement : foyers allocataires RSA/APL/AAH/AF/PA/CF... depuis 2020 (data.caf.fr CNAF) |
+| 29 | `rechercher_marche_public` | Recherche d'avis marches publics dans le BOAMP (appels d'offres, attributions, MAPA, DSP) — filtre type/dept/acheteur/dates (BOAMP DILA Opendatasoft) |
+| 30 | `rechercher_annonce_legale` | Recherche d'annonces legales dans le BODACC (immatriculations, radiations, cessions, procedures collectives) — filtre SIREN/nom/type/dept (BODACC DILA Opendatasoft) |
 
 ## Historique des sprints
 
@@ -230,6 +232,15 @@ src/
 | T60 | Nouveau tool `rechercher_jurisprudence` (Cour de cassation, cours d'appel, tribunaux via Legifrance) |
 | T61 | 3 nouvelles categories dispatch : `texte_legal`, `code_juridique`, `jurisprudence` (21 categories total) |
 | T62 | Version bump v1.9.0 — 26 outils, 21 categories dispatch |
+
+### Sprint 19 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T73 | **Nouveau** : `rechercher_marche_public` (BOAMP — appels d'offres, attributions, MAPA, DSP via boamp-datadila.opendatasoft.com) |
+| T76 | **Amelioration** : `comparer_communes` enrichi — IVAL meilleur lycee bac GT (taux reussite, VA, mentions) + aide sociale CAF dept (RSA/AL/AAH foyers) |
+| T80 | **Nouveau** : `rechercher_annonce_legale` (BODACC — immatriculations, radiations, cessions, procedures collectives via bodacc-datadila.opendatasoft.com) |
+| T81 | **Qualite** : 459 tests total (0 echec) — 11 tests BOAMP + 12 tests BODACC + 11 tests IVAL/CAF comparer + routing T73/T80 dans rechercher.ts |
+| T82 | Version bump v1.11.0 — 30 outils, 25 categories dispatch |
 
 ### Sprint 18 — Complete ✅
 | Tache | Description |

@@ -27,12 +27,14 @@ import { rechercherCodeJuridique } from "./tools/rechercher-code-juridique.js";
 import { rechercherJurisprudence } from "./tools/rechercher-jurisprudence.js";
 import { consulterJournalOfficiel } from "./tools/consulter-journal-officiel.js";
 import { consulterAideSociale } from "./tools/consulter-aide-sociale.js";
+import { rechercherMarchePublic } from "./tools/rechercher-marche-public.js";
+import { rechercherAnnonceLegale } from "./tools/rechercher-annonce-legale.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.10.0";
+const VERSION = "1.11.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -454,6 +456,41 @@ const TOOLS = [
     },
   },
   {
+    name: "rechercher_marche_public",
+    description:
+      "Recherche d'avis de marches publics (appels d'offres, attributions, MAPA, DSP) dans le BOAMP (Bulletin officiel des annonces des marches publics). Filtrage par mots-cles, type d'avis, departement, acheteur ou periode. Source : API BOAMP — DILA.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Mots-cles sur l'objet du marche (ex: 'travaux voirie', 'fourniture informatique', 'nettoyage locaux')" },
+        type_avis: { type: "string", enum: ["AAC", "APC", "MAPA", "DSP"], description: "Type d'avis : AAC=Appel a la concurrence, APC=Attribution, MAPA=Procedure adaptee, DSP=Delegation service public" },
+        departement: { type: "string", description: "Code departement (ex: '75', '93', '69')" },
+        acheteur: { type: "string", description: "Nom de l'acheteur public (ex: 'Commune de Lyon', 'Departement du Rhone')" },
+        date_debut: { type: "string", description: "Date de debut au format YYYY-MM-DD" },
+        date_fin: { type: "string", description: "Date de fin au format YYYY-MM-DD" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
+      },
+    },
+  },
+  {
+    name: "rechercher_annonce_legale",
+    description:
+      "Recherche d'annonces legales dans le BODACC (Bulletin officiel des annonces civiles et commerciales) : ventes et cessions, immatriculations, radiations, modifications, procedures collectives, depots de comptes. Filtrage par entreprise, SIREN, type d'annonce, departement ou periode. Source : API BODACC — DILA.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Recherche par nom d'entreprise ou ville (ex: 'SARL Martin', 'Bordeaux')" },
+        nom_entreprise: { type: "string", description: "Nom exact ou partiel de l'entreprise" },
+        siren: { type: "string", description: "Numero SIREN de l'entreprise (9 chiffres)" },
+        type_annonce: { type: "string", enum: ["vente_cession", "immatriculation", "radiation", "procedure_collective", "modification"], description: "Type d'annonce a filtrer" },
+        departement: { type: "string", description: "Code departement (ex: '75', '69')" },
+        date_debut: { type: "string", description: "Date de debut au format YYYY-MM-DD" },
+        date_fin: { type: "string", description: "Date de fin au format YYYY-MM-DD" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
+      },
+    },
+  },
+  {
     name: "rechercher_jurisprudence",
     description:
       "Recherche de jurisprudence judiciaire francaise : arrets de la Cour de cassation et cours d'appel. Retourne les decisions avec juridiction, formation, solution et lien Legifrance. Source : API Legifrance officielle (PISTE/DILA).",
@@ -534,6 +571,10 @@ async function executeTool(
       return consulterJournalOfficiel(args as { recherche: string; type_texte?: "LOI" | "DECRET" | "ARRETE" | "ORDONNANCE" | "CIRCULAIRE" | "AVIS" | "DECISION"; date_debut?: string; date_fin?: string; limit?: number }, env);
     case "consulter_aide_sociale":
       return consulterAideSociale(args as { commune?: string; code_postal?: string; code_insee?: string; code_departement?: string; prestation?: string; annee?: number });
+    case "rechercher_marche_public":
+      return rechercherMarchePublic(args as { recherche?: string; type_avis?: "AAC" | "APC" | "MAPA" | "DSP"; departement?: string; acheteur?: string; date_debut?: string; date_fin?: string; limit?: number }, env);
+    case "rechercher_annonce_legale":
+      return rechercherAnnonceLegale(args as { recherche?: string; nom_entreprise?: string; siren?: string; type_annonce?: "vente_cession" | "immatriculation" | "radiation" | "procedure_collective" | "modification"; departement?: string; date_debut?: string; date_fin?: string; limit?: number }, env);
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -595,6 +636,8 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Risques : consulter_risques_naturels (risques naturels/technologiques + arretes CatNat par commune)",
           "   - Journal Officiel : consulter_journal_officiel (JORF — textes publies, filtre LOI/DECRET/ARRETE/dates)",
           "   - Aide sociale : consulter_aide_sociale (stats CAF — allocataires RSA/APL/AAH/AF par commune ou dept)",
+          "   - Marches publics : rechercher_marche_public (BOAMP — appels d'offres, attributions, MAPA par mots-cles/dept/acheteur)",
+          "   - Annonces legales : rechercher_annonce_legale (BODACC — immatriculations, radiations, cessions, procedures collectives par SIREN/nom)",
           "",
           "PARAMETRES IMPORTANTS :",
           "- Les communes acceptent un nom, un code postal ou un code INSEE.",

@@ -3,6 +3,8 @@ import { resolveNomCommune, resolveCodePostal, resolveCodeInsee } from "../utils
 import { fetch6emeScores, extractDeptFromInsee } from "./consulter-evaluations-nationales.js";
 import { fetchSecuriteData } from "./consulter-securite.js";
 import { fetchRisques, fetchCatNat } from "./consulter-risques-naturels.js";
+import { fetchAideSocialeForCompare, type AideSocialeCompareData } from "./consulter-aide-sociale.js";
+import { fetchIvalForCompare, type IvalCompareData } from "./consulter-resultats-lycee.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
 const REI_API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets";
@@ -78,6 +80,8 @@ interface CommuneData {
   sante: SanteData | null;
   securite: SecuriteCompareData | null;
   risques: RisquesCompareData | null;
+  ival: IvalCompareData | null;
+  aideSociale: AideSocialeCompareData | null;
 }
 
 export async function comparerCommunes(args: ComparerCommunesArgs): Promise<ToolResult> {
@@ -153,7 +157,7 @@ async function resolveInput(input: string): Promise<{ nom: string; code: string 
 async function fetchCommuneData(nom: string, code: string): Promise<CommuneData> {
   const codeDept = extractDeptFromInsee(code);
 
-  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult, santeResult, securiteResult, risquesResult] = await Promise.allSettled([
+  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult, santeResult, securiteResult, risquesResult, ivalResult, aideSocialeResult] = await Promise.allSettled([
     fetchREI(code),
     fetchDvfMedianPrixM2(code, "Appartement"),
     fetchDvfMedianPrixM2(code, "Maison"),
@@ -166,6 +170,8 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     fetchSanteForCompare(codeDept),
     fetchSecuriteForCompare(codeDept),
     fetchRisquesForCompare(code),
+    fetchIvalForCompare(code),
+    fetchAideSocialeForCompare(codeDept),
   ]);
 
   const rei = reiResult.status === "fulfilled" ? reiResult.value : null;
@@ -180,6 +186,8 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
   const sante = santeResult.status === "fulfilled" ? santeResult.value : null;
   const securite = securiteResult.status === "fulfilled" ? securiteResult.value : null;
   const risques = risquesResult.status === "fulfilled" ? risquesResult.value : null;
+  const ival = ivalResult.status === "fulfilled" ? ivalResult.value : null;
+  const aideSociale = aideSocialeResult.status === "fulfilled" ? aideSocialeResult.value : null;
 
   // Densite = population / (surface en hectares / 100) = hab/km2
   const population = geo?.population ?? null;
@@ -204,6 +212,8 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     sante,
     securite,
     risques,
+    ival,
+    aideSociale,
   };
 }
 
@@ -614,6 +624,14 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   lines.push(`| \u26A0\uFE0F Risques naturels | ${data.map((d) => d.risques ? `${d.risques.nbRisques} identifie(s)` : "N/A").join(" | ")} |`);
   lines.push(`| \u26A0\uFE0F Arretes CatNat | ${data.map((d) => d.risques ? String(d.risques.nbCatNat) : "N/A").join(" | ")} |`);
   lines.push(`| Intercommunalite | ${data.map((d) => d.intercommunalite ?? "N/A").join(" | ")} |`);
+  // T76 -- IVAL meilleur lycee GT de la commune
+  lines.push(`| \uD83C\uDFEB Meilleur lyc\u00E9e bac (commune) | ${data.map((d) => d.ival ? `${d.ival.nomLycee} (${d.ival.tauxReussite.toFixed(1)}%${d.ival.valeurAjoutee != null ? `, VA ${d.ival.valeurAjoutee > 0 ? "+" : ""}${d.ival.valeurAjoutee}` : ""})` : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83C\uDFEB Taux mentions bac (commune) | ${data.map((d) => d.ival ? `${d.ival.tauxMentions.toFixed(1)}% (${d.ival.annee})` : "N/A").join(" | ")} |`);
+  // T76 -- Aide sociale CAF departementale
+  const anneeCAF = data.find(d => d.aideSociale?.annee)?.aideSociale?.annee ?? "";
+  lines.push(`| \uD83D\uDC9A RSA foyers dept${anneeCAF ? ` (${anneeCAF})` : ""} | ${data.map((d) => d.aideSociale?.nbFoyersRSA != null ? d.aideSociale.nbFoyersRSA.toLocaleString("fr-FR") : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83D\uDC9A Aides logement foyers dept | ${data.map((d) => d.aideSociale?.nbFoyersAPL != null ? d.aideSociale.nbFoyersAPL.toLocaleString("fr-FR") : "N/A").join(" | ")} |`);
+  lines.push(`| \uD83D\uDC9A AAH foyers dept | ${data.map((d) => d.aideSociale?.nbFoyersAAH != null ? d.aideSociale.nbFoyersAAH.toLocaleString("fr-FR") : "N/A").join(" | ")} |`);
   lines.push("");
 
   lines.push("**Points cles :**");
@@ -687,15 +705,27 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
       lines.push(`  \uD83C\uDFC6 Meilleur score scolaire (dept) : **${best.nom}** (moy. ${Math.round((best.scores6eme!.scoreFrancais + best.scores6eme!.scoreMaths) / 2)})`);
     }
   }
+  // T76 -- Point cle IVAL meilleur lycee bac
+  const withIval = data.filter((d) => d.ival !== null && d.ival.tauxReussite > 0);
+  if (withIval.length >= 2) {
+    const bestIval = withIval.reduce((a, b) => {
+      const scoreA = (a.ival!.valeurAjoutee ?? 0) * 10 + a.ival!.tauxReussite;
+      const scoreB = (b.ival!.valeurAjoutee ?? 0) * 10 + b.ival!.tauxReussite;
+      return scoreA > scoreB ? a : b;
+    });
+    lines.push(`  \uD83C\uDFC6 Meilleur lycee bac GT : **${bestIval.nom}** — ${bestIval.ival!.nomLycee} (${bestIval.ival!.tauxReussite.toFixed(1)}%)`);
+  }
   lines.push("");
   // Note donnees departementales
   const withSecurite = data.filter((d) => d.securite !== null);
-  const hasDeptData = withScores.length > 0 || withSante.length > 0 || withSecurite.length > 0;
+  const withAideSociale = data.filter((d) => d.aideSociale !== null);
+  const hasDeptData = withScores.length > 0 || withSante.length > 0 || withSecurite.length > 0 || withAideSociale.length > 0;
   if (hasDeptData) {
     const deptItems = [];
     if (withScores.length > 0) deptItems.push("Scores 6eme/IPS");
     if (withSante.length > 0) deptItems.push("densite medecins/patientele MT");
     if (withSecurite.length > 0) deptItems.push("securite/delinquance");
+    if (withAideSociale.length > 0) deptItems.push("aide sociale CAF (RSA/AL/AAH)");
     lines.push(`_Note : ${deptItems.join(", ")} = donnees departementales, non communales._`);
   }
   lines.push("");
@@ -705,7 +735,7 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     lines.push("");
   }
 
-  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales + Carte scolaire DEPP via data.education.gouv.fr, CNAM via data.ameli.fr (sante), SSMSI via data.gouv.fr (securite), Georisques BRGM/MTE (risques)_");
+  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales (IVAL) + Carte scolaire DEPP via data.education.gouv.fr, CNAM via data.ameli.fr (sante), SSMSI via data.gouv.fr (securite), Georisques BRGM/MTE (risques), CNAF data.caf.fr (aide sociale)_");
   return lines.join("\n");
 }
 

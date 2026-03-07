@@ -343,6 +343,50 @@ function formatResultat(r: IvalRecord, voie: string): string {
 }
 
 /** Formate la valeur ajoutee avec signe et emoji */
+/** Donnees IVAL simplifiees pour comparer_communes */
+export interface IvalCompareData {
+  nomLycee: string;
+  secteur: string;
+  tauxReussite: number;
+  tauxMentions: number;
+  valeurAjoutee: number | null;
+  annee: string;
+}
+
+/** Meilleur lycee GT de la commune (par VA reussite puis taux) */
+export async function fetchIvalForCompare(codeInsee: string): Promise<IvalCompareData | null> {
+  try {
+    const params = new URLSearchParams({
+      select: "annee, libelle_uai, secteur, taux_reu_total, va_reu_total, taux_men_total",
+      where: `code_commune='${codeInsee}'`,
+      order_by: "annee DESC, va_reu_total DESC, taux_reu_total DESC",
+      limit: "5",
+    });
+
+    const url = `${EDUCATION_API}/${DATASET_GT}/records?${params}`;
+    const response = await cachedFetch(url, { ttl: CACHE_TTL.ANNUAIRE, source: "education-gouv-ival" });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as { results: Array<Record<string, unknown>> };
+    if (!data.results?.length) return null;
+
+    // Garder la derniere annee disponible et le meilleur lycee
+    const latestAnnee = String(data.results[0].annee ?? "");
+    const best = data.results.find(r => String(r.annee ?? "") === latestAnnee) ?? data.results[0];
+
+    return {
+      nomLycee: String(best.libelle_uai ?? "N/A"),
+      secteur: String(best.secteur ?? "N/A"),
+      tauxReussite: Number(best.taux_reu_total ?? 0),
+      tauxMentions: Number(best.taux_men_total ?? 0),
+      valeurAjoutee: best.va_reu_total != null ? Number(best.va_reu_total) : null,
+      annee: latestAnnee,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function formatVA(va: number | null | undefined): string {
   if (va == null) return "";
   const sign = va > 0 ? "+" : "";

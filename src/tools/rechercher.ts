@@ -19,6 +19,8 @@ import { consulterSecurite } from "./consulter-securite.js";
 import { consulterRisquesNaturels } from "./consulter-risques-naturels.js";
 import { consulterJournalOfficiel } from "./consulter-journal-officiel.js";
 import { consulterAideSociale } from "./consulter-aide-sociale.js";
+import { rechercherMarchePublic } from "./rechercher-marche-public.js";
+import { rechercherAnnonceLegale } from "./rechercher-annonce-legale.js";
 import { rechercherTexteLegal } from "./rechercher-texte-legal.js";
 import { rechercherCodeJuridique } from "./rechercher-code-juridique.js";
 import { rechercherJurisprudence } from "./rechercher-jurisprudence.js";
@@ -51,7 +53,9 @@ export type QueryCategory =
   | "code_juridique"
   | "jurisprudence"
   | "journal_officiel"
-  | "aide_sociale";
+  | "aide_sociale"
+  | "marche_public"
+  | "annonce_legale";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -332,6 +336,32 @@ export async function rechercher(
       return prefixResult(result, "\uD83D\uDCF0 Journal Officiel (JORF — Legifrance)");
     }
 
+    case "marche_public": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const codeDept = extractCodeDepartement(query) ?? (codePostal ? codePostal.substring(0, 2) : null) ?? (communeName ? null : null);
+      const deptFinal = codeDept ?? (codePostal ? codePostal.substring(0, 2) : null);
+      const result = await rechercherMarchePublic(
+        { recherche: query, departement: deptFinal ?? undefined },
+      );
+      return prefixResult(result, "\uD83D\uDCC4 Marches publics (BOAMP)");
+    }
+
+    case "annonce_legale": {
+      const siret = extractSiret(query);
+      const siren = siret ? siret.substring(0, 9) : (extractSiren(query) ?? undefined);
+      const cleanedSearch = query
+        .replace(/\b(bodacc|annonce|legale|procedure|collective|radiation|immatriculation|cession|liquidation|redressement|judiciaire)s?\b/gi, "")
+        .replace(/\b(a|de|pour|dans|en|sur|les|des|du|au|la|le|d)\b/gi, "")
+        .trim();
+      const result = await rechercherAnnonceLegale(
+        siren
+          ? { siren }
+          : { nom_entreprise: cleanedSearch.length >= 2 ? cleanedSearch : query },
+      );
+      return prefixResult(result, "\uD83D\uDCDC Annonces legales (BODACC)");
+    }
+
     case "aide_sociale": {
       const communeName = extractCommuneName(query);
       const codePostal = extractCodePostal(query);
@@ -490,6 +520,38 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of journalOfficielPatterns) {
     if (pattern.test(q)) return "journal_officiel";
+  }
+
+  // T73 -- Patterns marches publics BOAMP (avant fiches_dila)
+  const marchesPublicsPatterns = [
+    /\bboamp\b/,
+    /\bmarche(s)?\s+(public|publics|de\s+travaux|de\s+services|de\s+fournitures)\b/,
+    /\bappel(s)?\s+(d.offres?|a\s+la\s+concurrence)\b/,
+    /\b(avis\s+de\s+)?marche\s+(passe|attribue|resilie)\b/,
+    /\bmapa\b/,
+    /\b(avis\s+d.?attribution|avis\s+d.?appel\s+public)\b/,
+    /\bdelegation\s+de\s+service\s+public\b/,
+    /\bcommande\s+publique\b/,
+  ];
+  for (const pattern of marchesPublicsPatterns) {
+    if (pattern.test(q)) return "marche_public";
+  }
+
+  // T80 -- Patterns annonces legales BODACC (avant fiches_dila)
+  const annonceLegalePatterns = [
+    /\bbodacc\b/,
+    /\bannonce(s)?\s+(legale|civile|commerciale)s?\b/,
+    /\bprocedure\s+collective\b/,
+    /\bredressement\s+judiciaire\b/,
+    /\bliquidation\s+judiciaire\b/,
+    /\bcessation\s+de\s+paiement\b/,
+    /\b(radiation|immatriculation)\b.*\b(rcs|entreprise|societe|kbis)\b/,
+    /\b(rcs|kbis)\b.*\b(radiation|immatriculation)\b/,
+    /\b(cession|vente)\s+(d.?entreprise|de\s+fonds\s+de\s+commerce|de\s+fonds\s+commercial)\b/,
+    /\bcreation\b.*\b(societe|entreprise|sas|sarl|eurl)\b.*\b(bodacc|annonce|publie)\b/,
+  ];
+  for (const pattern of annonceLegalePatterns) {
+    if (pattern.test(q)) return "annonce_legale";
   }
 
   // T74 -- Patterns aide sociale / allocations CAF (avant fiches_dila)

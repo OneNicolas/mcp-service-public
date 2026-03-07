@@ -206,6 +206,36 @@ function sanitize(s: string): string {
   return s.replace(/['"\\]/g, "");
 }
 
+/** Donnees CAF simplifiees pour comparer_communes (dept uniquement) */
+export interface AideSocialeCompareData {
+  nbFoyersRSA: number | null;
+  nbFoyersAPL: number | null;
+  nbFoyersAAH: number | null;
+  annee: string | null;
+}
+
+export async function fetchAideSocialeForCompare(codeDept: string): Promise<AideSocialeCompareData | null> {
+  try {
+    const stats = await fetchStatDepartement(codeDept);
+    if (stats.length === 0) return null;
+
+    // Prendre la derniere annee disponible
+    const latestAnnee = stats.reduce((max, r) => r.annee > max ? r.annee : max, "");
+    const latest = stats.filter(r => r.annee === latestAnnee);
+
+    const find = (code: string) => latest.find(r => r.prestation === code)?.nbFoyers ?? null;
+
+    return {
+      nbFoyersRSA: find("RSA"),
+      nbFoyersAPL: find("AL"),   // AL = aides au logement (APL+ALS+ALF)
+      nbFoyersAAH: find("AAH"),
+      annee: latestAnnee || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function consulterAideSociale(args: AideSocialeArgs): Promise<ToolResult> {
   try {
     const { prestation, annee, code_departement } = args;
