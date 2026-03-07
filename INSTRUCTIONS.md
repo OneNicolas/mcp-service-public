@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.9.1
+- **Version actuelle** : v1.10.0
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -51,6 +51,8 @@ src/
 │   ├── rechercher-texte-legal.ts           # Textes legaux (lois/decrets/arretes) via Legifrance proxy MCP
 │   ├── rechercher-code-juridique.ts        # Articles de codes juridiques via Legifrance proxy MCP
 │   ├── rechercher-jurisprudence.ts         # Jurisprudence judiciaire via Legifrance proxy MCP
+│   ├── consulter-journal-officiel.ts       # Journal Officiel JORF via API PISTE (fond JORF, filtre nature/dates)
+│   ├── consulter-aide-sociale.ts           # Stats CAF allocataires RSA/APL/AAH/AF par commune/dept (data.caf.fr)
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -90,7 +92,7 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 26 outils actuels (v1.9.0)
+## Les 28 outils actuels (v1.10.0)
 
 | # | Outil | Description |
 |---|---|---|
@@ -120,6 +122,8 @@ src/
 | 24 | `rechercher_texte_legal` | Recherche dans les textes legaux (lois, decrets, arretes, ordonnances) via Legifrance (openlegi.fr) |
 | 25 | `rechercher_code_juridique` | Recherche d'articles dans les codes juridiques francais (Code civil, travail, penal...) via Legifrance |
 | 26 | `rechercher_jurisprudence` | Recherche de jurisprudence judiciaire (Cour de cassation, cours d'appel, tribunaux) via Legifrance |
+| 27 | `consulter_journal_officiel` | Recherche dans le Journal Officiel (JORF) : lois, decrets, arretes, ordonnances, nominations — filtre type/dates (API PISTE DILA) |
+| 28 | `consulter_aide_sociale` | Statistiques CAF par commune ou departement : foyers allocataires RSA/APL/AAH/AF/PA/CF... depuis 2020 (data.caf.fr CNAF) |
 
 ## Historique des sprints
 
@@ -226,6 +230,20 @@ src/
 | T60 | Nouveau tool `rechercher_jurisprudence` (Cour de cassation, cours d'appel, tribunaux via Legifrance) |
 | T61 | 3 nouvelles categories dispatch : `texte_legal`, `code_juridique`, `jurisprudence` (21 categories total) |
 | T62 | Version bump v1.9.0 — 26 outils, 21 categories dispatch |
+
+### Sprint 18 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T70 | **Fix** : `pass env` dans `rechercher.ts` dispatcher pour les 3 outils Legifrance (texte_legal, code_juridique, jurisprudence) — *deploye* |
+| T71 | **Fix** : endpoint `DELETE /admin/stats` pour reset dashboard |
+| T72 | **Nouveau** : `consulter_journal_officiel` (JORF via API PISTE DILA — fond JORF, filtre nature/dates, searchJorf dans legifrance-client.ts) |
+| T73 | **Skip** : `rechercher_marche_public` (BOAMP) — reporte sprint suivant |
+| T74 | **Nouveau** : `consulter_aide_sociale` (stats CNAF — allocataires RSA/APL/AAH/AF/PA par commune/dept via data.caf.fr Opendatasoft v2.1) |
+| T75 | **Amelioration** : routing `rechercher.ts` — 2 nouvelles categories `journal_officiel` + `aide_sociale`, helper `extractTypeTexteJorf` |
+| T76 | **Skip** : enrichir `comparer_communes` — reporte sprint suivant |
+| T77 | **Qualite** : 36 tests rechercher-legifrance + 10 tests T72 JORF + routing T74/T75 (421 tests total, 0 echec) |
+| T78 | **Skip** : DX — reporte sprint suivant |
+| T79 | Version bump v1.10.0 — 28 outils, 23 categories dispatch |
 
 ### Sprint 17 — Complete ✅
 | Tache | Description |

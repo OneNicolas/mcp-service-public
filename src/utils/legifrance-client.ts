@@ -73,6 +73,9 @@ interface PisteSearchBody {
     operateur: string;
     sort: string;
     typePagination: string;
+    // Filtres date (JORF/LODA) : format "YYYY-MM-DD"
+    dateDebut?: string;
+    dateFin?: string;
   };
 }
 
@@ -83,6 +86,8 @@ interface PisteResult {
   dateTexte?: string;
   datePublicationJO?: string;
   numero?: string;
+  // NOR (identifiant normalise des textes JORF)
+  nor?: string;
   // Codes : numero d'article
   num?: string;
   // Jurisprudence
@@ -164,6 +169,12 @@ export interface LegifranceSearchOptions {
   juridiction?: string;
   /** Filtre publication bulletin Cour de cassation : "T" | "F" */
   publicationBulletin?: "T" | "F";
+  /** Filtre par nature de texte — JORF : "LOI", "DECRET", "ARRETE", "ORDONNANCE", "CIRCULAIRE" */
+  nature?: string;
+  /** Date de debut de recherche (format "YYYY-MM-DD") */
+  dateDebut?: string;
+  /** Date de fin de recherche (format "YYYY-MM-DD") */
+  dateFin?: string;
 }
 
 /** Recherche dans les textes legislatifs et reglementaires (lois, decrets, arretes) */
@@ -198,6 +209,16 @@ export async function searchJuri(
   return formatResults(data, "jurisprudence");
 }
 
+/** Recherche dans le Journal Officiel de la Republique Francaise (JORF) */
+export async function searchJorf(
+  clientId: string,
+  clientSecret: string,
+  opts: LegifranceSearchOptions,
+): Promise<string> {
+  const data = await pisteSearch(clientId, clientSecret, buildBody("JORF", opts));
+  return formatResults(data, "jorf");
+}
+
 // -----------------------------------------------------------------------
 // Construction du body de recherche PISTE
 // -----------------------------------------------------------------------
@@ -211,6 +232,9 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
     sort = "PERTINENCE",
     codeName,
     publicationBulletin,
+    nature,
+    dateDebut,
+    dateFin,
   } = opts;
 
   const filtres: Array<{ facette: string; valeur: string }> = [];
@@ -223,6 +247,11 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
   // Filtre publication bulletin (fond JURI uniquement)
   if (publicationBulletin && fond === "JURI") {
     filtres.push({ facette: "PUBLICATION_BULLETIN", valeur: publicationBulletin });
+  }
+
+  // Filtre nature de texte (JORF/LODA) : LOI, DECRET, ARRETE, ORDONNANCE...
+  if (nature && (fond === "JORF" || fond === "LODA")) {
+    filtres.push({ facette: "NATURE", valeur: nature.toUpperCase() });
   }
 
   return {
@@ -238,6 +267,8 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
         }],
       }],
       ...(filtres.length > 0 ? { filtres } : {}),
+      ...(dateDebut ? { dateDebut } : {}),
+      ...(dateFin ? { dateFin } : {}),
       pageNumber: 1,
       pageSize: Math.min(pageSize, 20),
       operateur: "ET",
@@ -251,7 +282,7 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
 // Formatters de sortie
 // -----------------------------------------------------------------------
 
-type ResultKind = "texte_legal" | "code" | "jurisprudence";
+type ResultKind = "texte_legal" | "code" | "jurisprudence" | "jorf";
 
 function formatResults(data: PisteSearchResponse, kind: ResultKind): string {
   const results = data.results ?? [];
@@ -293,6 +324,13 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
     if (r.solution) lines.push(`Solution : ${r.solution}`);
   }
 
+  if (kind === "jorf") {
+    if (r.numero) lines.push(`Numero : ${r.numero}`);
+    if (r.nor) lines.push(`NOR : ${r.nor}`);
+    if (r.dateTexte) lines.push(`Date : ${r.dateTexte}`);
+    if (r.datePublicationJO) lines.push(`Publication JO : ${r.datePublicationJO}`);
+  }
+
   // Extraits de texte
   if (r.extraits?.length) {
     lines.push("Extrait :");
@@ -315,6 +353,7 @@ function buildLegiLink(r: PisteResult, kind: ResultKind): string | null {
     case "texte_legal": return `https://www.legifrance.gouv.fr/loda/id/${id}`;
     case "code": return `https://www.legifrance.gouv.fr/codes/article_lc/${id}`;
     case "jurisprudence": return `https://www.legifrance.gouv.fr/juri/id/${id}`;
+    case "jorf": return `https://www.legifrance.gouv.fr/jorf/id/${id}`;
     default: return null;
   }
 }

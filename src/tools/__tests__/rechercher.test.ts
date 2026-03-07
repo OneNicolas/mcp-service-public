@@ -13,6 +13,7 @@ import {
   extractSiret,
   extractSiren,
   extractTypeEtablissement,
+  extractTypeTexteJorf,
 } from "../rechercher.js";
 
 describe("classifyQuery", () => {
@@ -689,6 +690,38 @@ describe("classifyQuery -- code_juridique", () => {
   });
 });
 
+// T72 -- journal officiel dispatch
+describe("classifyQuery -- journal_officiel", () => {
+  it("route les requetes Journal Officiel explicites", () => {
+    expect(classifyQuery("journal officiel du 5 mars")).toBe("journal_officiel");
+    expect(classifyQuery("JORF teletravail")).toBe("journal_officiel");
+    expect(classifyQuery("publie au JO 2024")).toBe("journal_officiel");
+    expect(classifyQuery("publie au jorf")).toBe("journal_officiel");
+  });
+
+  it("ne confond pas avec texte_legal", () => {
+    expect(classifyQuery("decret d'application teletravail")).toBe("texte_legal");
+    expect(classifyQuery("loi n° 2024-01 sur les retraites")).toBe("texte_legal");
+  });
+});
+
+// T74 -- aide sociale dispatch
+describe("classifyQuery -- aide_sociale", () => {
+  it("route les requetes allocataires CAF", () => {
+    expect(classifyQuery("allocataires RSA a Lyon")).toBe("aide_sociale");
+    expect(classifyQuery("nombre de foyers APL departement 93")).toBe("aide_sociale");
+    expect(classifyQuery("beneficiaires AAH commune de Bondy")).toBe("aide_sociale");
+    expect(classifyQuery("statistiques CAF departement 75")).toBe("aide_sociale");
+    expect(classifyQuery("combien d'allocataires RSA a Paris")).toBe("aide_sociale");
+  });
+
+  it("ne confond pas avec fiches dila", () => {
+    expect(classifyQuery("comment demander le RSA")).toBe("fiches_dila");
+    expect(classifyQuery("conditions pour l'APL")).toBe("fiches_dila");
+    expect(classifyQuery("demarche AAH handicap")).toBe("fiches_dila");
+  });
+});
+
 // T61 -- texte legal dispatch
 describe("classifyQuery -- texte_legal", () => {
   it("route les requetes texte legal", () => {
@@ -702,5 +735,36 @@ describe("classifyQuery -- texte_legal", () => {
   it("ne confond pas avec d'autres categories", () => {
     expect(classifyQuery("code civil responsabilite")).toBe("code_juridique");
     expect(classifyQuery("jurisprudence cour cassation")).toBe("jurisprudence");
+  });
+});
+
+// T72 -- extractTypeTexteJorf
+describe("extractTypeTexteJorf", () => {
+  it("detecte LOI", () => {
+    expect(extractTypeTexteJorf("loi sur les retraites")).toBe("LOI");
+    expect(extractTypeTexteJorf("loi de finances 2025")).toBe("LOI");
+  });
+
+  it("detecte DECRET", () => {
+    expect(extractTypeTexteJorf("decret d'application")).toBe("DECRET");
+    expect(extractTypeTexteJorf("décret du 15 mars")).toBe("DECRET");
+  });
+
+  it("detecte ARRETE", () => {
+    expect(extractTypeTexteJorf("arrete ministeriel vaccination")).toBe("ARRETE");
+    expect(extractTypeTexteJorf("arrêté préfectoral")).toBe("ARRETE");
+  });
+
+  it("detecte ORDONNANCE", () => {
+    expect(extractTypeTexteJorf("ordonnance 2020")).toBe("ORDONNANCE");
+  });
+
+  it("detecte CIRCULAIRE", () => {
+    expect(extractTypeTexteJorf("circulaire teletravail")).toBe("CIRCULAIRE");
+  });
+
+  it("retourne null si aucune nature reconnue", () => {
+    expect(extractTypeTexteJorf("protection donnees")).toBeNull();
+    expect(extractTypeTexteJorf("JORF teletravail")).toBeNull();
   });
 });

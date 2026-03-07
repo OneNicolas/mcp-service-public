@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { rechercherTexteLegal } from "../rechercher-texte-legal.js";
 import { rechercherCodeJuridique } from "../rechercher-code-juridique.js";
 import { rechercherJurisprudence } from "../rechercher-jurisprudence.js";
+import { consulterJournalOfficiel } from "../consulter-journal-officiel.js";
 
 // Mock du client Legifrance PISTE
 vi.mock("../../utils/legifrance-client.js", () => ({
   searchLoda: vi.fn(),
   searchCode: vi.fn(),
   searchJuri: vi.fn(),
+  searchJorf: vi.fn(),
   LegifranceClientError: class LegifranceClientError extends Error {
     constructor(message: string) {
       super(message);
@@ -16,11 +18,12 @@ vi.mock("../../utils/legifrance-client.js", () => ({
   },
 }));
 
-import { searchLoda, searchCode, searchJuri, LegifranceClientError } from "../../utils/legifrance-client.js";
+import { searchLoda, searchCode, searchJuri, searchJorf, LegifranceClientError } from "../../utils/legifrance-client.js";
 
 const mockSearchLoda = searchLoda as ReturnType<typeof vi.fn>;
 const mockSearchCode = searchCode as ReturnType<typeof vi.fn>;
 const mockSearchJuri = searchJuri as ReturnType<typeof vi.fn>;
+const mockSearchJorf = searchJorf as ReturnType<typeof vi.fn>;
 
 const MOCK_ENV = {
   DB: {} as D1Database,
@@ -298,5 +301,137 @@ describe("rechercherJurisprudence", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Timeout");
+  });
+});
+
+// ============================================================
+// consulterJournalOfficiel
+// ============================================================
+
+const SAMPLE_JORF_RESULT = `RESULTATS (2 sur 17 total) :
+
+=== 1 ===
+Titre : Loi n 2024-364 du 22 avril 2024 portant diverses dispositions d'adaptation au droit de l'Union europeenne
+Nature : LOI
+Numero : 2024-364
+Date : 2024-04-22
+Publication JO : 2024-04-23
+Lien : https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000049441002`;
+
+describe("consulterJournalOfficiel", () => {
+  it("retourne isError si recherche vide", async () => {
+    const result = await consulterJournalOfficiel({ recherche: "" }, MOCK_ENV);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("termes");
+  });
+
+  it("retourne isError si recherche trop courte", async () => {
+    const result = await consulterJournalOfficiel({ recherche: "a" }, MOCK_ENV);
+    expect(result.isError).toBe(true);
+  });
+
+  it("retourne isError si env manquant", async () => {
+    const result = await consulterJournalOfficiel({ recherche: "teletravail" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Configuration");
+  });
+
+  it("retourne isError si date_debut mal formattee", async () => {
+    const result = await consulterJournalOfficiel(
+      { recherche: "teletravail", date_debut: "01/01/2024" },
+      MOCK_ENV,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("YYYY-MM-DD");
+  });
+
+  it("appelle searchJorf avec les bons arguments (sans filtre)", async () => {
+    mockSearchJorf.mockResolvedValueOnce(SAMPLE_JORF_RESULT);
+
+    await consulterJournalOfficiel({ recherche: "protection donnees", limit: 3 }, MOCK_ENV);
+
+    expect(mockSearchJorf).toHaveBeenCalledWith("test-client-id", "test-client-secret", {
+      query: "protection donnees",
+      pageSize: 3,
+      sort: "PERTINENCE",
+      nature: undefined,
+      dateDebut: undefined,
+      dateFin: undefined,
+    });
+  });
+
+  it("passe le filtre nature LOI si type_texte specifie", async () => {
+    mockSearchJorf.mockResolvedValueOnce(SAMPLE_JORF_RESULT);
+
+    await consulterJournalOfficiel({ recherche: "finances", type_texte: "LOI" }, MOCK_ENV);
+
+    expect(mockSearchJorf).toHaveBeenCalledWith(
+      expect.any(String), expect.any(String),
+      expect.objectContaining({ nature: "LOI" }),
+    );
+  });
+
+  it("utilise sort DATE_DESC quand une date est specifiee", async () => {
+    mockSearchJorf.mockResolvedValueOnce(SAMPLE_JORF_RESULT);
+
+    await consulterJournalOfficiel(
+      { recherche: "teletravail", date_debut: "2024-01-01" },
+      MOCK_ENV,
+    );
+
+    expect(mockSearchJorf).toHaveBeenCalledWith(
+      expect.any(String), expect.any(String),
+      expect.objectContaining({ sort: "DATE_DESC", dateDebut: "2024-01-01" }),
+    );
+  });
+
+  it("retourne le texte avec header JORF et source PISTE", async () => {
+    mockSearchJorf.mockResolvedValueOnce(SAMPLE_JORF_RESULT);
+
+    const result = await consulterJournalOfficiel({ recherche: "teletravail" }, MOCK_ENV);
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Journal Officiel");
+    expect(result.content[0].text).toContain("PISTE");
+    expect(result.content[0].text).toContain("legifrance.gouv.fr");
+  });
+
+  it("inclut le type de texte dans le header si specifie", async () => {
+    mockSearchJorf.mockResolvedValueOnce(SAMPLE_JORF_RESULT);
+
+    const result = await consulterJournalOfficiel(
+      { recherche: "finances", type_texte: "DECRET" },
+      MOCK_ENV,
+    );
+
+    expect(result.content[0].text).toContain("DECRET");
+  });
+
+  it("retourne isError sur LegifranceClientError", async () => {
+    mockSearchJorf.mockRejectedValueOnce(new LegifranceClientError("PISTE timeout"));
+
+    const result = await consulterJournalOfficiel({ recherche: "teletravail" }, MOCK_ENV);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("PISTE timeout");
+  });
+
+  it("retourne isError sur erreur generique", async () => {
+    mockSearchJorf.mockRejectedValueOnce(new Error("Network"));
+
+    const result = await consulterJournalOfficiel({ recherche: "teletravail" }, MOCK_ENV);
+
+    expect(result.isError).toBe(true);
+  });
+
+  it("limite pageSize a 20", async () => {
+    mockSearchJorf.mockResolvedValueOnce(SAMPLE_JORF_RESULT);
+
+    await consulterJournalOfficiel({ recherche: "decret", limit: 99 }, MOCK_ENV);
+
+    expect(mockSearchJorf).toHaveBeenCalledWith(
+      expect.any(String), expect.any(String),
+      expect.objectContaining({ pageSize: 20 }),
+    );
   });
 });

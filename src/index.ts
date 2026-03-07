@@ -25,12 +25,14 @@ import { consulterRisquesNaturels } from "./tools/consulter-risques-naturels.js"
 import { rechercherTexteLegal } from "./tools/rechercher-texte-legal.js";
 import { rechercherCodeJuridique } from "./tools/rechercher-code-juridique.js";
 import { rechercherJurisprudence } from "./tools/rechercher-jurisprudence.js";
+import { consulterJournalOfficiel } from "./tools/consulter-journal-officiel.js";
+import { consulterAideSociale } from "./tools/consulter-aide-sociale.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.9.1";
+const VERSION = "1.10.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -420,6 +422,38 @@ const TOOLS = [
     },
   },
   {
+    name: "consulter_journal_officiel",
+    description:
+      "Recherche dans le Journal Officiel de la Republique Francaise (JORF). Retourne les textes publies au JO avec leur titre, nature, date, NOR et lien Legifrance. Filtrage par type (LOI/DECRET/ARRETE/ORDONNANCE...) et plage de dates. Source : API PISTE officielle DILA/Legifrance.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        recherche: { type: "string", description: "Termes de recherche (ex: 'teletravail', 'protection donnees', 'loi finances 2025')" },
+        type_texte: { type: "string", enum: ["LOI", "DECRET", "ARRETE", "ORDONNANCE", "CIRCULAIRE", "AVIS", "DECISION"], description: "Filtrer par nature du texte (optionnel)" },
+        date_debut: { type: "string", description: "Date de debut au format YYYY-MM-DD (ex: '2024-01-01')" },
+        date_fin: { type: "string", description: "Date de fin au format YYYY-MM-DD (ex: '2024-12-31')" },
+        limit: { type: "number", description: "Nombre de resultats (1-20, defaut 5)" },
+      },
+      required: ["recherche"],
+    },
+  },
+  {
+    name: "consulter_aide_sociale",
+    description:
+      "Statistiques CAF par commune ou departement : nombre de foyers allocataires et personnes couvertes pour RSA, aides au logement (APL/ALS/ALF), AAH, allocations familiales, prime d'activite et autres prestations. Donnees agregees anonymisees depuis 2020. Source : CNAF — data.caf.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bondy')" },
+        code_postal: { type: "string", description: "Code postal (ex: '93140')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune (ex: '93010')" },
+        code_departement: { type: "string", description: "Code departement (ex: '93', '75', '2A')" },
+        prestation: { type: "string", description: "Code de prestation a filtrer : RSA, AL, AAH, AF, PA, CF, ASF, CMG... ou 'toutes' (defaut)" },
+        annee: { type: "number", description: "Annee specifique (ex: 2022). Par defaut : derniere annee disponible." },
+      },
+    },
+  },
+  {
     name: "rechercher_jurisprudence",
     description:
       "Recherche de jurisprudence judiciaire francaise : arrets de la Cour de cassation et cours d'appel. Retourne les decisions avec juridiction, formation, solution et lien Legifrance. Source : API Legifrance officielle (PISTE/DILA).",
@@ -496,6 +530,10 @@ async function executeTool(
       return rechercherCodeJuridique(args as { recherche: string; code: string; champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE"; type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOT"; limit?: number }, env);
     case "rechercher_jurisprudence":
       return rechercherJurisprudence(args as { recherche: string; juridiction?: "Cour de cassation" | "Cours d'appel" | "Toutes"; publie_bulletin?: boolean; limit?: number }, env);
+    case "consulter_journal_officiel":
+      return consulterJournalOfficiel(args as { recherche: string; type_texte?: "LOI" | "DECRET" | "ARRETE" | "ORDONNANCE" | "CIRCULAIRE" | "AVIS" | "DECISION"; date_debut?: string; date_fin?: string; limit?: number }, env);
+    case "consulter_aide_sociale":
+      return consulterAideSociale(args as { commune?: string; code_postal?: string; code_insee?: string; code_departement?: string; prestation?: string; annee?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -555,6 +593,8 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Insertion pro : consulter_insertion_professionnelle (InserJeunes — taux emploi/poursuite etudes apres CAP/Bac Pro/BTS)",
           "   - Securite : consulter_securite (delinquance departementale — cambriolages, vols, violences, taux/1000 hab.)",
           "   - Risques : consulter_risques_naturels (risques naturels/technologiques + arretes CatNat par commune)",
+          "   - Journal Officiel : consulter_journal_officiel (JORF — textes publies, filtre LOI/DECRET/ARRETE/dates)",
+          "   - Aide sociale : consulter_aide_sociale (stats CAF — allocataires RSA/APL/AAH/AF par commune ou dept)",
           "",
           "PARAMETRES IMPORTANTS :",
           "- Les communes acceptent un nom, un code postal ou un code INSEE.",

@@ -17,6 +17,8 @@ import { consulterAccesSoins } from "./consulter-acces-soins.js";
 import { consulterInsertionProfessionnelle } from "./consulter-insertion-professionnelle.js";
 import { consulterSecurite } from "./consulter-securite.js";
 import { consulterRisquesNaturels } from "./consulter-risques-naturels.js";
+import { consulterJournalOfficiel } from "./consulter-journal-officiel.js";
+import { consulterAideSociale } from "./consulter-aide-sociale.js";
 import { rechercherTexteLegal } from "./rechercher-texte-legal.js";
 import { rechercherCodeJuridique } from "./rechercher-code-juridique.js";
 import { rechercherJurisprudence } from "./rechercher-jurisprudence.js";
@@ -47,7 +49,9 @@ export type QueryCategory =
   | "risques_naturels"
   | "texte_legal"
   | "code_juridique"
-  | "jurisprudence";
+  | "jurisprudence"
+  | "journal_officiel"
+  | "aide_sociale";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -319,6 +323,30 @@ export async function rechercher(
       return prefixResult(risquesResult, "\u26A0\uFE0F Risques naturels (Georisques)");
     }
 
+    case "journal_officiel": {
+      const typeTexte = extractTypeTexteJorf(query);
+      const result = await consulterJournalOfficiel(
+        { recherche: query, type_texte: typeTexte ?? undefined, limit },
+        env,
+      );
+      return prefixResult(result, "\uD83D\uDCF0 Journal Officiel (JORF — Legifrance)");
+    }
+
+    case "aide_sociale": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const codeDept = extractCodeDepartement(query);
+      const loc = communeName
+        ? { commune: communeName }
+        : codePostal
+          ? { code_postal: codePostal }
+          : codeDept
+            ? { code_departement: codeDept }
+            : {};
+      const result = await consulterAideSociale(loc);
+      return prefixResult(result, "\uD83E\uDD1D Aide sociale (statistiques CAF — data.caf.fr)");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -449,6 +477,36 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of securitePatterns) {
     if (pattern.test(q)) return "securite";
+  }
+
+  // T72 -- Patterns Journal Officiel (avant texte_legal pour eviter faux positifs)
+  const journalOfficielPatterns = [
+    /\bjorf\b/,
+    /\bjournal\s+officiel\b/,
+    /\bnor\s*:\s*[A-Z]{4}\d{7}[A-Z]\b/i,
+    /\bpublie\s+au\s+(jo|jorf)\b/,
+    /\bbo\s+de\s+l.?etat\b/,
+  ];
+
+  for (const pattern of journalOfficielPatterns) {
+    if (pattern.test(q)) return "journal_officiel";
+  }
+
+  // T74 -- Patterns aide sociale / allocations CAF (avant fiches_dila)
+  const aideSocialePatterns = [
+    /\ballocataires?\b.*\b(caf|rsa|apl|aah|prime\s+activite)\b/,
+    /\b(rsa|apl|aah|prime\s+activite)\b.*\ballocataires?\b/,
+    /\bnb\s+foyers?\b.*\b(rsa|apl|aah)\b/,
+    /\bfoyers?\b.*\b(beneficiaires?|rsa|apl|aah)\b.*\b(commune|departement|ville)\b/,
+    /\bstatistiques?\b.*\b(caf|allocations?|aide\s+sociale)\b/,
+    /\b(caf|allocations?\s+familiales?)\b.*\bcommune\b/,
+    /\bcombien\b.*\b(allocataires?|beneficiaires?)\b.*\b(rsa|apl|aah|prime\s+activite)\b/,
+    /\b(rsa|apl|aah)\b.*\b(taux|part|proportion|pourcentage)\b.*\b(commune|departement|ville|territoire)\b/,
+    /\bbeneficiaires?\s+(rsa|apl|aah|af|prime\s+activite)\b.*\b(commune|departement|ville|territoire)\b/,
+  ];
+
+  for (const pattern of aideSocialePatterns) {
+    if (pattern.test(q)) return "aide_sociale";
   }
 
   // T54 -- Patterns risques naturels
@@ -974,6 +1032,21 @@ export function cleanLegalQuery(query: string): string {
     .replace(/\b(loi|decret|arrete|ordonnance|du|de|la|les|des|un|une)\b/gi, "")
     .trim()
     || query.trim();
+}
+
+/** T72 -- Extrait la nature de texte JORF depuis la query */
+export function extractTypeTexteJorf(
+  query: string,
+): "LOI" | "DECRET" | "ARRETE" | "ORDONNANCE" | "CIRCULAIRE" | "AVIS" | "DECISION" | null {
+  const q = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/\bloi\b/.test(q)) return "LOI";
+  if (/\bdecret\b/.test(q)) return "DECRET";
+  if (/\barrete\b/.test(q)) return "ARRETE";
+  if (/\bordonnance\b/.test(q)) return "ORDONNANCE";
+  if (/\bcirculaire\b/.test(q)) return "CIRCULAIRE";
+  if (/\bavis\b/.test(q)) return "AVIS";
+  if (/\bdecision\b/.test(q)) return "DECISION";
+  return null;
 }
 
 /** T61 -- Extrait la juridiction depuis la query */
