@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { extractDeptFromInsee } from "../consulter-acces-soins.js";
 
 describe("consulter-acces-soins", () => {
@@ -24,11 +24,17 @@ describe("consulter-acces-soins", () => {
     });
   });
 
-  // Tests de formatage et logique pure
+  // Tests de formatage et logique pure (avec mock reseau)
   describe("formatage rapport", () => {
+    beforeEach(() => {
+      vi.resetModules();
+    });
+
     it("gere un departement sans donnees", async () => {
-      // Le tool doit retourner un message propre si aucune donnee
-      // Ce test valide la logique de fallback
+      // Mock cachedFetch pour simuler une reponse vide de data.ameli.fr
+      vi.doMock("../../utils/cache.js", () => ({
+        cachedFetch: vi.fn().mockResolvedValue({ results: [], total_count: 0 }),
+      }));
       const { consulterAccesSoins } = await import("../consulter-acces-soins.js");
       const result = await consulterAccesSoins({ code_departement: "00" });
       // Departement inexistant : doit retourner un message (pas un crash)
