@@ -90,9 +90,9 @@ interface PisteResult {
   nor?: string;
   // Codes : numero d'article (alias PISTE : "num")
   num?: string;
-  // Contenu brut de l'article (CODE_ETAT : "texte")
+  // Contenu brut de l'article (apres aplatissement CODE_ETAT)
   texte?: string;
-  // Etat juridique (CODE_ETAT : "etatJuridique")
+  // Etat juridique (apres aplatissement)
   etatJuridique?: string;
   // Jurisprudence
   solution?: string;
@@ -110,9 +110,12 @@ interface PisteResult {
       type?: string;
       id?: string;
       num?: string;
-      titre?: string;
-      texte?: string;
-      etatJuridique?: string;
+      title?: string;
+      values?: string[];     // extraits de texte avec mark HTML
+      legalStatus?: string;  // VIGUEUR | MODIFIE | ABROGE
+      dateVersion?: string;
+      dateDebut?: string;
+      dateFin?: string;
     }>;
   }>;
   // Lien
@@ -168,22 +171,7 @@ async function pisteSearch(
     throw new LegifranceClientError(`PISTE API erreur ${res.status} : ${text.slice(0, 300)}`);
   }
 
-  const json = await res.json() as PisteSearchResponse;
-  // Debug temporaire : inspecter la structure du 1er resultat
-  const r0 = json.results?.[0];
-  if (r0) {
-    const s0 = (r0 as Record<string, unknown>).sections;
-    if (Array.isArray(s0) && s0.length) {
-      const e0 = (s0[0] as Record<string, unknown>).extracts;
-      if (Array.isArray(e0) && e0.length) {
-        console.log(`[legifrance-client] DEBUG extract[0] keys: ${Object.keys(e0[0] as object).join(', ')}`);
-        console.log(`[legifrance-client] DEBUG extract[0]: ${JSON.stringify(e0[0]).slice(0, 400)}`);
-      } else {
-        console.log(`[legifrance-client] DEBUG result[0] keys: ${Object.keys(r0 as object).join(', ')}`);
-      }
-    }
-  }
-  return json;
+  return res.json() as Promise<PisteSearchResponse>;
 }
 
 // -----------------------------------------------------------------------
@@ -354,13 +342,17 @@ function flattenCodeResults(results: PisteResult[]): PisteResult[] {
       for (const section of item.sections) {
         for (const extract of section.extracts ?? []) {
           if (extract.type !== "articles") continue;
+          // Nettoyer les balises <mark> des extraits de texte
+          const rawText = extract.values?.[0] ?? "";
+          const cleanText = rawText.replace(/<\/?mark>/g, "").replace(/^\[\.\.\. \]/, "").trim();
           flat.push({
             id: extract.id ?? item.id,
-            cid: section.id ?? item.cid,
+            // Pour CODE_ETAT, l'id de l'article est LEGIARTI — on l'utilise comme cid pour le lien
+            cid: extract.id ?? item.cid,
             num: extract.num,
-            titre: extract.titre ?? section.title,
-            texte: extract.texte,
-            etatJuridique: extract.etatJuridique,
+            titre: extract.title ?? section.title ?? undefined,
+            texte: cleanText || undefined,
+            etatJuridique: extract.legalStatus,
           });
         }
       }
