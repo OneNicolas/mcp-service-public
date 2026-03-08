@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.13.2
+- **Version actuelle** : v1.13.3
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -239,7 +239,7 @@ src/
 | Fix | `comparer_communes` : resolveInput essaie d'abord resolveCodeInsee avant resolveCodePostal (codes INSEE 69123/38185/63113 mal resolus) |
 | Fix | `legifrance-client.ts` : fond CODE→CODE_ETAT, LODA→LODA_ETAT, filtres valeurs[] (tableau), sort PERTINENCE obligatoire, flattenCodeResults pour structure sections[].extracts[], champs reels extracts (values[], legalStatus) |
 | Fix | `legifrance-client.ts` formatter texte_legal/jurisprudence : champs reels JSON (num, dateTexte, datePubli, juridiction, numeroAffaire, titreLong) vs noms TS incorrects (numero, datePublicationJO, numDecision, dateDecision) |
-| Bump | Version v1.13.2 |
+| Bump | Version v1.13.3 |
 
 ### Sprint 19 — Complete ✅
 | Tache | Description |
