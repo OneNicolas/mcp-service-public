@@ -231,7 +231,6 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
     champ = "ALL",
     typeRecherche = "TOUS_LES_MOTS_DANS_UN_CHAMP",
     pageSize = 10,
-    codeName,
     publicationBulletin,
     nature,
     dateDebut,
@@ -241,9 +240,10 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
   const filtres: Array<{ facette: string; valeur: string }> = [];
 
   // Filtre nom de code (fond CODE)
-  if (codeName) {
-    filtres.push({ facette: "NOM_CODE", valeur: codeName });
-  }
+  // NOM_CODE renvoie 400 — test temporaire sans filtre pour isoler le problème
+  // if (codeName) {
+  //   filtres.push({ facette: "NOM_CODE", valeur: codeName });
+  // }
 
   // Filtre publication bulletin (fond JURI uniquement)
   if (publicationBulletin && fond === "JURI") {
