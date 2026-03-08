@@ -88,11 +88,11 @@ src/
 
 1. Creer `src/tools/mon-outil.ts` avec `export async function monOutil(args, env?): Promise<ToolResult>`
 2. Dans `index.ts` : ajouter import + definition dans `TOOLS[]` + case dans `executeTool()`
-3. Bump `VERSION`
+3. Bump version dans : `package.json`, `server.json`, `INSTRUCTIONS.md`, `README.md`
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 34 outils actuels (v1.13.1)
+## Les 34 outils actuels (v1.13.3)
 
 | # | Outil | Description |
 |---|---|---|
