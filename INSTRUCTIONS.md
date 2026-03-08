@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.13.3
+- **Version actuelle** : v1.13.4
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -92,7 +92,7 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 34 outils actuels (v1.13.3)
+## Les 34 outils actuels (v1.13.4)
 
 | # | Outil | Description |
 |---|---|---|
@@ -240,6 +240,13 @@ src/
 | Fix | `legifrance-client.ts` : fond CODE→CODE_ETAT, LODA→LODA_ETAT, filtres valeurs[] (tableau), sort PERTINENCE obligatoire, flattenCodeResults pour structure sections[].extracts[], champs reels extracts (values[], legalStatus) |
 | Fix | `legifrance-client.ts` formatter texte_legal/jurisprudence : champs reels JSON (num, dateTexte, datePubli, juridiction, numeroAffaire, titreLong) vs noms TS incorrects (numero, datePublicationJO, numDecision, dateDecision) |
 | Bump | Version v1.13.3 |
+
+### Sprint 22 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T-LEG-1 | Fix `rechercher_texte_legal` : `flattenCodeResults` applique pour LODA_ETAT (articles dans sections[].extracts[]), metadata texte parent (titre/nature/dateTexte) propagees aux extracts, formatter affiche Article + Etat + Contenu, lien `loda/article_lc/` |
+| T-LEG-2 | Fix `rechercher_jurisprudence` : champ `juridictionJudiciaire` (reel PISTE), conversion timestamp ms -> date lisible (`formatTimestampMs`), lien JURI utilise `r.id` (JURITEXT) |
+| Bump | Version v1.13.4 |
 
 ### Sprint 19 — Complete ✅
 | Tache | Description |

@@ -98,6 +98,7 @@ interface PisteResult {
   solution?: string;
   formation?: string;
   juridiction?: string;
+  juridictionJudiciaire?: string;  // champ reel PISTE : "Cour de cassation" | "Juridictions d'appel"
   numeroAffaire?: string[];  // numero(s) d'affaire JURI
   titreLong?: string;        // titre long LODA (fallback si titre est null)
   // Texte extrait
@@ -314,9 +315,9 @@ function formatResults(data: PisteSearchResponse, kind: ResultKind): string {
   const rawResults = data.results ?? [];
   if (!rawResults.length) return "Aucun resultat trouve.";
 
-  // CODE_ETAT : les articles sont niches dans results[].sections[].extracts[]
+  // CODE_ETAT / LODA_ETAT : les articles sont niches dans results[].sections[].extracts[]
   // On aplatit la structure pour obtenir une liste d'articles plats
-  const results: PisteResult[] = kind === "code"
+  const results: PisteResult[] = (kind === "code" || kind === "texte_legal")
     ? flattenCodeResults(rawResults)
     : rawResults;
 
@@ -334,7 +335,7 @@ function formatResults(data: PisteSearchResponse, kind: ResultKind): string {
   return lines.join("\n");
 }
 
-/** Aplatit la structure CODE_ETAT : results[].sections[].extracts[] -> PisteResult[] */
+/** Aplatit la structure CODE_ETAT / LODA_ETAT : results[].sections[].extracts[] -> PisteResult[] */
 function flattenCodeResults(results: PisteResult[]): PisteResult[] {
   const flat: PisteResult[] = [];
   for (const item of results) {
@@ -348,9 +349,13 @@ function flattenCodeResults(results: PisteResult[]): PisteResult[] {
           flat.push({
             id: extract.id ?? item.id,
             // Pour CODE_ETAT, l'id de l'article est LEGIARTI — on l'utilise comme cid pour le lien
+            // Pour LODA_ETAT, l'id de l'article est LEGIARTI ou JORFARTI
             cid: extract.id ?? item.cid,
             num: extract.num,
-            titre: extract.title ?? section.title ?? undefined,
+            // Titre du texte parent (loi, decret...) : affiche le contexte juridique de l'extrait
+            titre: item.titre ?? item.titreLong ?? extract.title ?? section.title ?? undefined,
+            nature: item.nature,      // nature du texte parent : LOI, DECRET, ARRETE...
+            dateTexte: item.dateTexte, // date du texte parent
             texte: cleanText || undefined,
             etatJuridique: extract.legalStatus,
           });
@@ -372,9 +377,11 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
   if (r.nature) lines.push(`Nature : ${r.nature}`);
 
   if (kind === "texte_legal") {
-    if (r.num) lines.push(`Numero : ${r.num}`);
+    if (r.num) lines.push(`Article : ${r.num}`);
     if (r.dateTexte) lines.push(`Date : ${r.dateTexte}`);
     if (r.datePubli) lines.push(`Publication JO : ${r.datePubli}`);
+    if (r.etatJuridique) lines.push(`Etat : ${r.etatJuridique}`);
+    if (r.texte) lines.push(`Contenu :\n${r.texte.slice(0, 800)}${r.texte.length > 800 ? "..." : ""}`);
   }
 
   if (kind === "code") {
@@ -384,12 +391,15 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
   }
 
   if (kind === "jurisprudence") {
-    if (r.juridiction) lines.push(`Juridiction : ${r.juridiction}`);
+    // juridictionJudiciaire est le champ reel retourne par PISTE (juridiction est un alias parfois absent)
+    const jurid = r.juridictionJudiciaire ?? r.juridiction;
+    if (jurid) lines.push(`Juridiction : ${jurid}`);
     if (r.formation) lines.push(`Formation : ${r.formation}`);
     // numeroAffaire est un tableau cote PISTE, num est l'identifiant court
     const numAffaire = r.num ?? r.numeroAffaire?.[0];
     if (numAffaire) lines.push(`Numero : ${numAffaire}`);
-    if (r.dateTexte) lines.push(`Date : ${r.dateTexte}`);
+    // dateTexte peut etre un timestamp en millisecondes (ex: 1546819200000)
+    if (r.dateTexte) lines.push(`Date : ${formatTimestampMs(r.dateTexte)}`);
     if (r.solution) lines.push(`Solution : ${r.solution}`);
   }
 
@@ -414,17 +424,37 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
 }
 
 function buildLegiLink(r: PisteResult, kind: ResultKind): string | null {
-  if (!r.id && !r.cid) return null;
-  const id = r.cid ?? r.id;
-  if (!id) return null;
-
   switch (kind) {
-    case "texte_legal": return `https://www.legifrance.gouv.fr/loda/id/${id}`;
-    case "code": return `https://www.legifrance.gouv.fr/codes/article_lc/${id}`;
-    case "jurisprudence": return `https://www.legifrance.gouv.fr/juri/id/${id}`;
-    case "jorf": return `https://www.legifrance.gouv.fr/jorf/id/${id}`;
+    case "texte_legal": {
+      const id = r.cid ?? r.id;
+      return id ? `https://www.legifrance.gouv.fr/loda/article_lc/${id}` : null;
+    }
+    case "code": {
+      const id = r.cid ?? r.id;
+      return id ? `https://www.legifrance.gouv.fr/codes/article_lc/${id}` : null;
+    }
+    case "jurisprudence": {
+      // Les decisions JURI portent un JURITEXT comme id — c'est la reference correcte pour le lien
+      const id = r.id ?? r.cid;
+      return id ? `https://www.legifrance.gouv.fr/juri/id/${id}` : null;
+    }
+    case "jorf": {
+      const id = r.cid ?? r.id;
+      return id ? `https://www.legifrance.gouv.fr/jorf/id/${id}` : null;
+    }
     default: return null;
   }
+}
+
+/**
+ * Convertit un timestamp en millisecondes (champ dateTexte JURI) en date lisible.
+ * Si la valeur n'est pas un nombre valide, la retourne telle quelle (deja une date).
+ */
+function formatTimestampMs(ts: string | undefined): string {
+  if (!ts) return "";
+  const n = Number(ts);
+  if (isNaN(n) || n === 0) return ts; // deja une string date
+  return new Date(n).toLocaleDateString("fr-FR");
 }
 
 // -----------------------------------------------------------------------
