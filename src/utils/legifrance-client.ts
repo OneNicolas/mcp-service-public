@@ -88,8 +88,12 @@ interface PisteResult {
   numero?: string;
   // NOR (identifiant normalise des textes JORF)
   nor?: string;
-  // Codes : numero d'article
+  // Codes : numero d'article (alias PISTE : "num")
   num?: string;
+  // Contenu brut de l'article (CODE_ETAT : "texte")
+  texte?: string;
+  // Etat juridique (CODE_ETAT : "etatJuridique")
+  etatJuridique?: string;
   // Jurisprudence
   solution?: string;
   formation?: string;
@@ -98,7 +102,19 @@ interface PisteResult {
   juridiction?: string;
   // Texte extrait
   extraits?: string[];
-  sections?: Array<{ id: string; title: string }>;
+  // Sections imbriquees (CODE_ETAT) : contiennent les extracts/articles
+  sections?: Array<{
+    id?: string;
+    title?: string;
+    extracts?: Array<{
+      type?: string;
+      id?: string;
+      num?: string;
+      titre?: string;
+      texte?: string;
+      etatJuridique?: string;
+    }>;
+  }>;
   // Lien
   cid?: string;
   texteHtmlRef?: string;
@@ -292,7 +308,15 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
 type ResultKind = "texte_legal" | "code" | "jurisprudence" | "jorf";
 
 function formatResults(data: PisteSearchResponse, kind: ResultKind): string {
-  const results = data.results ?? [];
+  const rawResults = data.results ?? [];
+  if (!rawResults.length) return "Aucun resultat trouve.";
+
+  // CODE_ETAT : les articles sont niches dans results[].sections[].extracts[]
+  // On aplatit la structure pour obtenir une liste d'articles plats
+  const results: PisteResult[] = kind === "code"
+    ? flattenCodeResults(rawResults)
+    : rawResults;
+
   if (!results.length) return "Aucun resultat trouve.";
 
   const total = data.totalResultNumber ?? results.length;
@@ -305,6 +329,32 @@ function formatResults(data: PisteSearchResponse, kind: ResultKind): string {
   }
 
   return lines.join("\n");
+}
+
+/** Aplatit la structure CODE_ETAT : results[].sections[].extracts[] -> PisteResult[] */
+function flattenCodeResults(results: PisteResult[]): PisteResult[] {
+  const flat: PisteResult[] = [];
+  for (const item of results) {
+    if (item.sections?.length) {
+      for (const section of item.sections) {
+        for (const extract of section.extracts ?? []) {
+          if (extract.type !== "articles") continue;
+          flat.push({
+            id: extract.id ?? item.id,
+            cid: section.id ?? item.cid,
+            num: extract.num,
+            titre: extract.titre ?? section.title,
+            texte: extract.texte,
+            etatJuridique: extract.etatJuridique,
+          });
+        }
+      }
+    } else {
+      // Pas de sections = article deja plat (fallback)
+      flat.push(item);
+    }
+  }
+  return flat;
 }
 
 function formatOneResult(r: PisteResult, kind: ResultKind): string {
@@ -321,6 +371,8 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
 
   if (kind === "code") {
     if (r.num) lines.push(`Article : ${r.num}`);
+    if (r.etatJuridique) lines.push(`Etat : ${r.etatJuridique}`);
+    if (r.texte) lines.push(`Contenu :\n${r.texte.slice(0, 800)}${r.texte.length > 800 ? "..." : ""}`);
   }
 
   if (kind === "jurisprudence") {
