@@ -67,7 +67,8 @@ interface PisteSearchBody {
         operateur: string;
       }>;
     }>;
-    filtres?: Array<{ facette: string; valeur: string }>;
+    filtres?: Array<{ facette: string; valeur?: string; valeurs?: string[] }>;
+    sort: string;
     pageNumber: number;
     pageSize: number;
     operateur: string;
@@ -241,13 +242,13 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
     dateFin,
   } = opts;
 
-  const filtres: Array<{ facette: string; valeur: string }> = [];
+  const filtres: Array<{ facette: string; valeur?: string; valeurs?: string[] }> = [];
 
-  // Filtre nom de code
+  // Filtre nom de code — utilise "valeurs" (tableau) comme l'API PISTE l'attend
   // CODE_ETAT utilise TEXT_NOM_CODE ; CODE_DATE et autres fonds utilisent NOM_CODE
   if (codeName) {
     const facetteCode = fond === "CODE_ETAT" ? "TEXT_NOM_CODE" : "NOM_CODE";
-    filtres.push({ facette: facetteCode, valeur: codeName });
+    filtres.push({ facette: facetteCode, valeurs: [codeName] });
   }
 
   // Filtre publication bulletin (fond JURI uniquement)
@@ -275,6 +276,7 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
       ...(filtres.length > 0 ? { filtres } : {}),
       ...(dateDebut ? { dateDebut } : {}),
       ...(dateFin ? { dateFin } : {}),
+      sort: "PERTINENCE",
       pageNumber: 1,
       pageSize: Math.min(pageSize, 20),
       operateur: "ET",
