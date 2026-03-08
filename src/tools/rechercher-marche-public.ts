@@ -1,5 +1,6 @@
 import type { Env, ToolResult } from "../types.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
+import { suggestAlternative } from "../utils/suggest-alternative.js";
 
 const BOAMP_API = "https://boamp-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/boamp/records";
 
@@ -47,7 +48,7 @@ export async function rechercherMarchePublic(
 
   if (!recherche && !type_avis && !departement && !acheteur) {
     return {
-      content: [{ type: "text", text: "Veuillez fournir au moins un critere : recherche, type_avis, departement ou acheteur." }],
+      content: [{ type: "text", text: "Veuillez fournir au moins un critere : recherche, type_avis, departement ou acheteur." + suggestAlternative("rechercher_marche_public") }],
       isError: true,
     };
   }

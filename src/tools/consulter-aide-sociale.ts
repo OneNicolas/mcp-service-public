@@ -11,6 +11,7 @@
 import type { ToolResult } from "../types.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 import { resolveNomCommune, resolveCodePostal } from "../utils/geo-api.js";
+import { suggestAlternative } from "../utils/suggest-alternative.js";
 
 const CAF_API = "https://data.caf.fr/api/explore/v2.1/catalog/datasets";
 
@@ -272,7 +273,7 @@ export async function consulterAideSociale(args: AideSocialeArgs): Promise<ToolR
     }
 
     return {
-      content: [{ type: "text", text: "Precisez une commune (nom, code postal ou code INSEE) ou un code departement pour consulter les statistiques d'allocataires CAF." }],
+      content: [{ type: "text", text: "Precisez une commune (nom, code postal ou code INSEE) ou un code departement pour consulter les statistiques d'allocataires CAF." + suggestAlternative("consulter_aide_sociale") }],
       isError: true,
     };
   } catch (error) {

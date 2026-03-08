@@ -29,12 +29,16 @@ import { consulterJournalOfficiel } from "./tools/consulter-journal-officiel.js"
 import { consulterAideSociale } from "./tools/consulter-aide-sociale.js";
 import { rechercherMarchePublic } from "./tools/rechercher-marche-public.js";
 import { rechercherAnnonceLegale } from "./tools/rechercher-annonce-legale.js";
+import { rechercherOffreEmploi } from "./tools/rechercher-offre-emploi.js";
+import { consulterBudgetCommune } from "./tools/consulter-budget-commune.js";
+import { rechercherSubvention } from "./tools/rechercher-subvention.js";
+import { consulterSireneHistorique } from "./tools/consulter-sirene-historique.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.11.0";
+const VERSION = "1.13.0";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;
@@ -473,6 +477,52 @@ const TOOLS = [
     },
   },
   {
+    name: "consulter_budget_commune",
+    description:
+      "Consulte les comptes financiers d'une commune : recettes, depenses, epargne brute, encours de dette, investissements. Donnees 2017-2024. Source : OFGL via data.ofgl.fr.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bordeaux')" },
+        code_postal: { type: "string", description: "Code postal (ex: '69001')" },
+        code_insee: { type: "string", description: "Code INSEE de la commune (ex: '69123')" },
+        annee: { type: "number", description: "Annee du budget (2017-2024). Par defaut : derniere disponible." },
+      },
+    },
+  },
+  {
+    name: "rechercher_subvention",
+    description:
+      "Recherche des subventions versees par les collectivites locales et organismes publics. Filtrage par beneficiaire, attribuant, objet, montant minimum et annee. Source : data.gouv.fr (obligation legale > 23 000 EUR).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        beneficiaire: { type: "string", description: "Nom du beneficiaire (association, organisme, entreprise)" },
+        attribuant: { type: "string", description: "Nom de l'organisme attribuant (commune, departement, metropole...)" },
+        objet: { type: "string", description: "Objet ou descriptif de la subvention (recherche partielle)" },
+        montant_min: { type: "number", description: "Montant minimum en euros (ex: 10000)" },
+        annee: { type: "number", description: "Annee de la convention (ex: 2023)" },
+        limit: { type: "number", description: "Nombre de resultats (1-50, defaut 10)" },
+      },
+    },
+  },
+  {
+    name: "consulter_sirene_historique",
+    description:
+      "Recherche des entreprises par secteur d'activite (code NAF/APE) et zone geographique. Retourne les informations SIRENE : nom, etat (actif/cesse), dates de creation et fermeture. Source : API Recherche Entreprises (DINUM).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        code_naf: { type: "string", description: "Code NAF/APE (ex: '10.71C' boulangerie, '56.10A' restauration, '62.01Z' informatique)" },
+        commune: { type: "string", description: "Commune (ex: 'Lyon', 'Paris')" },
+        code_postal: { type: "string", description: "Code postal (ex: '69001')" },
+        code_departement: { type: "string", description: "Code departement (ex: '69', '75')" },
+        etat: { type: "string", enum: ["actif", "cesse"], description: "Filtrer par etat : actif (A) ou cesse (C). Par defaut : tous." },
+        limit: { type: "number", description: "Nombre de resultats (1-25, defaut 10)" },
+      },
+    },
+  },
+  {
     name: "rechercher_annonce_legale",
     description:
       "Recherche d'annonces legales dans le BODACC (Bulletin officiel des annonces civiles et commerciales) : ventes et cessions, immatriculations, radiations, modifications, procedures collectives, depots de comptes. Filtrage par entreprise, SIREN, type d'annonce, departement ou periode. Source : API BODACC — DILA.",
@@ -487,6 +537,23 @@ const TOOLS = [
         date_debut: { type: "string", description: "Date de debut au format YYYY-MM-DD" },
         date_fin: { type: "string", description: "Date de fin au format YYYY-MM-DD" },
         limit: { type: "number", description: "Nombre de resultats (1-20, defaut 10)" },
+      },
+    },
+  },
+  {
+    name: "rechercher_offre_emploi",
+    description:
+      "Recherche d'offres d'emploi actives en temps reel via France Travail. Filtrage par mots-cles, commune, code postal, departement, type de contrat (CDI/CDD/MIS...) et qualification (cadre/non-cadre). Necessite les secrets FT_CLIENT_ID / FT_CLIENT_SECRET (inscription gratuite sur francetravail.io). Source : API Offres d'emploi v2 — France Travail.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        mots_cles: { type: "string", description: "Mots-cles sur l'intitule ou la description du poste (ex: 'developpeur TypeScript', 'infirmier', 'comptable')" },
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Paris'). Resout automatiquement en code commune." },
+        code_postal: { type: "string", description: "Code postal (ex: '69001'). Resout en code commune." },
+        departement: { type: "string", description: "Code departement (ex: '75', '69', '93'). Alternative a commune/code_postal." },
+        type_contrat: { type: "string", description: "Type de contrat : CDI, CDD, MIS (interim), SAI (saisonnier), LIB (liberale), REP (reprise), CUI (aide), PRO (professionnalisation)" },
+        qualification: { type: "string", enum: ["cadre", "non-cadre"], description: "Niveau de qualification (optionnel)" },
+        limit: { type: "number", description: "Nombre de resultats (1-30, defaut 10)" },
       },
     },
   },
@@ -573,8 +640,16 @@ async function executeTool(
       return consulterAideSociale(args as { commune?: string; code_postal?: string; code_insee?: string; code_departement?: string; prestation?: string; annee?: number });
     case "rechercher_marche_public":
       return rechercherMarchePublic(args as { recherche?: string; type_avis?: "AAC" | "APC" | "MAPA" | "DSP"; departement?: string; acheteur?: string; date_debut?: string; date_fin?: string; limit?: number }, env);
+    case "consulter_budget_commune":
+      return consulterBudgetCommune(args as { commune?: string; code_postal?: string; code_insee?: string; annee?: number });
+    case "rechercher_subvention":
+      return rechercherSubvention(args as { beneficiaire?: string; attribuant?: string; montant_min?: number; annee?: number; objet?: string; limit?: number });
+    case "consulter_sirene_historique":
+      return consulterSireneHistorique(args as { code_naf?: string; commune?: string; code_postal?: string; code_departement?: string; etat?: "actif" | "cesse"; limit?: number });
     case "rechercher_annonce_legale":
       return rechercherAnnonceLegale(args as { recherche?: string; nom_entreprise?: string; siren?: string; type_annonce?: "vente_cession" | "immatriculation" | "radiation" | "procedure_collective" | "modification"; departement?: string; date_debut?: string; date_fin?: string; limit?: number }, env);
+    case "rechercher_offre_emploi":
+      return rechercherOffreEmploi(args as { mots_cles?: string; commune?: string; code_postal?: string; departement?: string; type_contrat?: string; qualification?: "cadre" | "non-cadre"; limit?: number }, env);
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -608,7 +683,135 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
     case "initialize":
       return jsonRpcResponse(body.id, {
         protocolVersion: "2025-03-26",
-        capabilities: { tools: {} },
+        capabilities: {
+          tools: {},
+          prompts: {
+            listChanged: false,
+            prompts: [
+              {
+                name: "comparer_communes_achat",
+                description: "Compare 2 a 5 communes pour un projet d'achat immobilier : prix DVF, fiscalite, zonage ABC, services, risques.",
+                arguments: [
+                  { name: "communes", description: "Liste de communes separees par des virgules (ex: Lyon, Bordeaux, Nantes)", required: true },
+                ],
+              },
+              {
+                name: "comparer_communes_demenagement",
+                description: "Compare 2 a 5 communes pour un demenagement : ecoles, securite, acces soins, fiscalite, transports.",
+                arguments: [
+                  { name: "communes", description: "Liste de communes separees par des virgules", required: true },
+                  { name: "nb_enfants", description: "Nombre d'enfants a scolariser (optionnel)", required: false },
+                ],
+              },
+              {
+                name: "simuler_achat_immobilier",
+                description: "Simule le cout complet d'un achat immobilier : frais de notaire, taxe fonciere estimee, zonage Pinel/PTZ.",
+                arguments: [
+                  { name: "commune", description: "Commune du bien", required: true },
+                  { name: "prix", description: "Prix d'achat en euros (ex: 250000)", required: true },
+                  { name: "surface", description: "Surface en m2", required: true },
+                  { name: "type_bien", description: "Maison ou Appartement", required: true },
+                  { name: "type_achat", description: "ancien ou neuf", required: false },
+                ],
+              },
+              {
+                name: "verifier_entreprise",
+                description: "Verifie la situation legale d'une entreprise : SIRET, forme juridique, dirigeants, conventions collectives, annonces BODACC.",
+                arguments: [
+                  { name: "entreprise", description: "Nom ou numero SIRET/SIREN de l'entreprise", required: true },
+                ],
+              },
+              {
+                name: "trouver_textes_loi",
+                description: "Trouve les textes de loi, decrets et arretes sur un sujet precis via Legifrance.",
+                arguments: [
+                  { name: "sujet", description: "Sujet juridique (ex: protection donnees personnelles, teletravail)", required: true },
+                  { name: "type", description: "LOI, DECRET, ARRETE ou tous (defaut)", required: false },
+                ],
+              },
+              {
+                name: "simuler_impot_complet",
+                description: "Simule l'impot sur le revenu avec situation familiale, revenus fonciers, capitaux et micro-entrepreneur.",
+                arguments: [
+                  { name: "revenu", description: "Revenu net imposable en euros", required: true },
+                  { name: "situation", description: "celibataire, marie, pacse, divorce ou veuf", required: false },
+                  { name: "nb_enfants", description: "Nombre d'enfants a charge", required: false },
+                  { name: "revenus_fonciers", description: "Revenus fonciers bruts en euros", required: false },
+                ],
+              },
+              {
+                name: "trouver_marche_public",
+                description: "Recherche des appels d'offres publics (BOAMP) par secteur d'activite et/ou departement.",
+                arguments: [
+                  { name: "secteur", description: "Secteur ou objet du marche (ex: travaux voirie, nettoyage, informatique)", required: true },
+                  { name: "departement", description: "Code departement (ex: 75, 69)", required: false },
+                  { name: "type", description: "AAC (appel offres), APC (attribution), MAPA ou DSP", required: false },
+                ],
+              },
+              {
+                name: "aide_sociale_departement",
+                description: "Consulte les statistiques CAF d'un departement ou d'une commune : RSA, APL, AAH, allocations familiales.",
+                arguments: [
+                  { name: "lieu", description: "Commune, code postal ou code departement", required: true },
+                  { name: "prestation", description: "RSA, AL, AAH, AF, PA ou toutes (defaut)", required: false },
+                ],
+              },
+              {
+                name: "trouver_lycee_resultats",
+                description: "Trouve un lycee et consulte ses resultats au bac : taux de reussite, valeur ajoutee, mentions.",
+                arguments: [
+                  { name: "commune", description: "Commune ou code postal du lycee", required: true },
+                  { name: "nom", description: "Nom partiel du lycee (optionnel)", required: false },
+                  { name: "type", description: "gt (general/techno), pro ou tous (defaut)", required: false },
+                ],
+              },
+              {
+                name: "insertion_pro_lycee",
+                description: "Consulte l'insertion professionnelle apres un CAP, Bac Pro ou BTS dans un lycee professionnel.",
+                arguments: [
+                  { name: "lieu", description: "Ville, departement ou UAI du lycee", required: true },
+                  { name: "formation", description: "Specialite ou intitule de formation (optionnel)", required: false },
+                ],
+              },
+              {
+                name: "securite_commune",
+                description: "Consulte les statistiques de delinquance departementale d'une commune : cambriolages, vols, violences, taux pour 1000 hab.",
+                arguments: [
+                  { name: "lieu", description: "Commune, code postal ou code departement", required: true },
+                ],
+              },
+              {
+                name: "risques_naturels_commune",
+                description: "Identifie les risques naturels et technologiques d'une commune et liste les arretes de catastrophe naturelle.",
+                arguments: [
+                  { name: "commune", description: "Nom de la commune ou code postal", required: true },
+                ],
+              },
+              {
+                name: "trouver_convention_collective",
+                description: "Trouve la convention collective applicable a un secteur d'activite ou une entreprise.",
+                arguments: [
+                  { name: "secteur", description: "Secteur ou nom de l'entreprise (ex: boulangerie, metallurgie)", required: true },
+                ],
+              },
+              {
+                name: "evolution_prix_immobilier",
+                description: "Analyse l'evolution des prix immobiliers DVF d'une commune depuis 2019, par type de bien.",
+                arguments: [
+                  { name: "commune", description: "Commune ou code postal", required: true },
+                  { name: "type_bien", description: "Appartement, Maison ou les deux (defaut)", required: false },
+                ],
+              },
+              {
+                name: "acces_soins_departement",
+                description: "Analyse la densite medicale d'un departement : medecins generalistes, specialistes, zones sous-dotees.",
+                arguments: [
+                  { name: "lieu", description: "Commune, code postal ou code departement", required: true },
+                ],
+              },
+            ],
+          },
+        },
         serverInfo: { name: "service-public", version: VERSION },
         instructions: [
           "Serveur MCP pour les donnees publiques francaises (service-public.fr, DGFiP, DVF, BOFiP, KALI, DINUM).",
@@ -637,6 +840,10 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Journal Officiel : consulter_journal_officiel (JORF — textes publies, filtre LOI/DECRET/ARRETE/dates)",
           "   - Aide sociale : consulter_aide_sociale (stats CAF — allocataires RSA/APL/AAH/AF par commune ou dept)",
           "   - Marches publics : rechercher_marche_public (BOAMP — appels d'offres, attributions, MAPA par mots-cles/dept/acheteur)",
+          "   - Budget communes : consulter_budget_commune (OFGL 2017-2024 — recettes, depenses, epargne brute, encours dette par commune)",
+          "   - Subventions : rechercher_subvention (data.gouv.fr — subventions collectivites locales > 23 000 EUR, par beneficiaire/attribuant)",
+          "   - Entreprises SIRENE : consulter_sirene_historique (creations/cessations par secteur NAF, commune ou departement)",
+          "   - Offres emploi : rechercher_offre_emploi (France Travail — offres actives par mots-cles, commune, departement, type contrat CDI/CDD/interim)",
           "   - Annonces legales : rechercher_annonce_legale (BODACC — immatriculations, radiations, cessions, procedures collectives par SIREN/nom)",
           "",
           "PARAMETRES IMPORTANTS :",

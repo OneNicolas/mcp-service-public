@@ -5,6 +5,9 @@ export interface Env {
   /** Credentials OAuth2 PISTE pour l'API Legifrance officielle */
   PISTE_CLIENT_ID: string;
   PISTE_CLIENT_SECRET: string;
+  /** Credentials OAuth2 France Travail pour l'API Offres d'emploi (optionnel) */
+  FT_CLIENT_ID?: string;
+  FT_CLIENT_SECRET?: string;
 }
 
 /** Fiche pratique stored in D1 */

@@ -8,6 +8,7 @@ import type { ToolResult } from "../types.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 import { resolveCodePostal, resolveNomCommune } from "../utils/geo-api.js";
 import { extractDeptFromInsee } from "./consulter-evaluations-nationales.js";
+import { suggestAlternative } from "../utils/suggest-alternative.js";
 
 const RESOURCE_ID = "2b27a675-e3bf-41ef-a852-5fb9ab483967";
 const TABULAR_API = `https://tabular-api.data.gouv.fr/api/resources/${RESOURCE_ID}/data/`;
@@ -56,7 +57,7 @@ export async function resolveCodeDepartement(args: SecuriteArgs): Promise<string
     throw new Error(`Commune non trouvee : "${args.commune}".`);
   }
 
-  throw new Error("Veuillez preciser un code departement, une commune ou un code postal.");
+  throw new Error("Veuillez preciser un code departement, une commune ou un code postal." + suggestAlternative("consulter_securite"));
 }
 
 /** Recupere les donnees de securite pour un departement */

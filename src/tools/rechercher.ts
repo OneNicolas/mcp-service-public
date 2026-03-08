@@ -24,6 +24,9 @@ import { rechercherAnnonceLegale } from "./rechercher-annonce-legale.js";
 import { rechercherTexteLegal } from "./rechercher-texte-legal.js";
 import { rechercherCodeJuridique } from "./rechercher-code-juridique.js";
 import { rechercherJurisprudence } from "./rechercher-jurisprudence.js";
+import { consulterBudgetCommune } from "./consulter-budget-commune.js";
+import { rechercherSubvention } from "./rechercher-subvention.js";
+import { consulterSireneHistorique } from "./consulter-sirene-historique.js";
 
 interface RechercherArgs {
   query: string;
@@ -55,7 +58,10 @@ export type QueryCategory =
   | "journal_officiel"
   | "aide_sociale"
   | "marche_public"
-  | "annonce_legale";
+  | "annonce_legale"
+  | "budget_commune"
+  | "subvention"
+  | "sirene_historique";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -377,6 +383,38 @@ export async function rechercher(
       return prefixResult(result, "\uD83E\uDD1D Aide sociale (statistiques CAF — data.caf.fr)");
     }
 
+    case "budget_commune": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const result = await consulterBudgetCommune(
+        codePostal ? { code_postal: codePostal }
+        : { commune: communeName ?? query },
+      );
+      return prefixResult(result, "\uD83C\uDFDB\uFE0F Budget commune (OFGL — data.ofgl.fr)");
+    }
+
+    case "subvention": {
+      const cleanedQ = query
+        .replace(/\b(subvention|subventions|attribution|versee?s?|attribuee?s?)\b/gi, "")
+        .replace(/\b(de|du|des|par|pour|a|en)\b/gi, "")
+        .trim();
+      const result = await rechercherSubvention({ beneficiaire: cleanedQ.length >= 3 ? cleanedQ : query, limit });
+      return prefixResult(result, "\uD83D\uDCB0 Subventions (data.gouv.fr — collectivites locales)");
+    }
+
+    case "sirene_historique": {
+      const communeName = extractCommuneName(query);
+      const codePostal = extractCodePostal(query);
+      const codeDept = extractCodeDepartement(query);
+      const result = await consulterSireneHistorique(
+        codePostal ? { code_postal: codePostal }
+        : communeName ? { commune: communeName }
+        : codeDept ? { code_departement: codeDept }
+        : { commune: query },
+      );
+      return prefixResult(result, "\uD83C\uDFED SIRENE — Entreprises (DINUM — API Recherche Entreprises)");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -569,6 +607,41 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of aideSocialePatterns) {
     if (pattern.test(q)) return "aide_sociale";
+  }
+
+  // T85a -- Patterns budget commune
+  const budgetCommunePatterns = [
+    /\bbudget\b.*\b(commune|ville|municipal)\b/,
+    /\b(commune|ville)\b.*\bbudget\b/,
+    /\b(recettes?|depenses?|epargne\s+brute|encours\s+de\s+dette|annuite\s+de\s+la\s+dette)\b.*\b(commune|ville|municipal)\b/,
+    /\b(commune|ville)\b.*\b(recettes?|depenses?|epargne\s+brute|encours\s+de\s+dette)\b/,
+    /\bfinances?\s+(locales?|municipales?|communales?)\b/,
+    /\bcomptes?\s+(de\s+la\s+commune|communaux?|municipaux?)\b/,
+    /\bofgl\b/,
+  ];
+  for (const pattern of budgetCommunePatterns) {
+    if (pattern.test(q)) return "budget_commune";
+  }
+
+  // T85b -- Patterns subventions
+  const subventionPatterns = [
+    /\bsubvention(s)?\b.*\b(association|organisme|beneficiaire|versee?|attribuee?)\b/,
+    /\b(association|organisme)\b.*\bsubvention(s)?\b/,
+    /\b(montant|attribution|versement)\b.*\bsubvention(s)?\b/,
+  ];
+  for (const pattern of subventionPatterns) {
+    if (pattern.test(q)) return "subvention";
+  }
+
+  // T85d -- Patterns SIRENE historique
+  const sireneHistoriquePatterns = [
+    /\b(creation|creations?\s+d.entreprises?|nouvelles?\s+entreprises?)\b.*\b(secteur|naf|ape|commune|departement|ville)\b/,
+    /\b(radiation|cessation|fermeture)\b.*\b(entreprises?|societes?|etablissements?)\b.*\b(secteur|commune|departement)\b/,
+    /\bhistorique\b.*\b(sirene|entreprise|creation|cessation)\b/,
+    /\bcombien\b.*\b(entreprises?|societes?)\b.*\b(crees?|ouvert|ferme|cess)\b/,
+  ];
+  for (const pattern of sireneHistoriquePatterns) {
+    if (pattern.test(q)) return "sirene_historique";
   }
 
   // T54 -- Patterns risques naturels
