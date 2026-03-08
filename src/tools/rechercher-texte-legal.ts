@@ -13,7 +13,7 @@ export type ChampTexteLegal = "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE";
 interface TexteLegalArgs {
   recherche: string;
   champ?: ChampTexteLegal;
-  type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOT";
+  type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOTS";
   limit?: number;
 }
 

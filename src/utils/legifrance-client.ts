@@ -68,7 +68,7 @@ interface PisteSearchBody {
       }>;
     }>;
     filtres?: Array<{ facette: string; valeur: string }>;
-    pageNumber: number;
+    pageNum: number;
     pageSize: number;
     operateur: string;
     sort: string;
@@ -162,7 +162,7 @@ async function pisteSearch(
 export interface LegifranceSearchOptions {
   query: string;
   champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE";
-  typeRecherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOT";
+  typeRecherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOTS";
   pageSize?: number;
   sort?: "PERTINENCE" | "DATE_ASC" | "DATE_DESC";
   /** Filtre par nom de code (fond CODE uniquement) */
@@ -271,7 +271,7 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
       ...(filtres.length > 0 ? { filtres } : {}),
       ...(dateDebut ? { dateDebut } : {}),
       ...(dateFin ? { dateFin } : {}),
-      pageNumber: 1,
+      pageNum: 1,
       pageSize: Math.min(pageSize, 20),
       operateur: "ET",
       sort,

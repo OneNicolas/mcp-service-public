@@ -405,7 +405,7 @@ const TOOLS = [
       properties: {
         recherche: { type: "string", description: "Mots-cles de recherche (ex: 'protection donnees personnelles', 'teletravail conges')" },
         champ: { type: "string", enum: ["ALL", "TITLE", "ARTICLE", "NUM_ARTICLE"], description: "Champ de recherche (defaut: ALL)" },
-        type_recherche: { type: "string", enum: ["TOUS_LES_MOTS_DANS_UN_CHAMP", "EXACTE", "UN_DES_MOT"], description: "Type de recherche (defaut: TOUS_LES_MOTS_DANS_UN_CHAMP)" },
+        type_recherche: { type: "string", enum: ["TOUS_LES_MOTS_DANS_UN_CHAMP", "EXACTE", "UN_DES_MOTS"], description: "Type de recherche (defaut: TOUS_LES_MOTS_DANS_UN_CHAMP)" },
         limit: { type: "number", description: "Nombre de resultats (1-20, defaut 5)" },
       },
       required: ["recherche"],
@@ -421,7 +421,7 @@ const TOOLS = [
         recherche: { type: "string", description: "Termes de recherche (ex: 'contrat de travail', 'legitime defense', 'clause abusive')" },
         code: { type: "string", description: "Nom complet du code juridique (ex: 'Code civil', 'Code du travail', 'Code penal', 'Code de commerce')" },
         champ: { type: "string", enum: ["ALL", "TITLE", "ARTICLE", "NUM_ARTICLE"], description: "Champ de recherche (defaut: ALL)" },
-        type_recherche: { type: "string", enum: ["TOUS_LES_MOTS_DANS_UN_CHAMP", "EXACTE", "UN_DES_MOT"], description: "Type de recherche (defaut: TOUS_LES_MOTS_DANS_UN_CHAMP)" },
+        type_recherche: { type: "string", enum: ["TOUS_LES_MOTS_DANS_UN_CHAMP", "EXACTE", "UN_DES_MOTS"], description: "Type de recherche (defaut: TOUS_LES_MOTS_DANS_UN_CHAMP)" },
         limit: { type: "number", description: "Nombre de resultats (1-20, defaut 5)" },
       },
       required: ["recherche", "code"],
@@ -629,9 +629,9 @@ async function executeTool(
     case "consulter_risques_naturels":
       return consulterRisquesNaturels(args as { commune?: string; code_postal?: string; code_insee?: string });
     case "rechercher_texte_legal":
-      return rechercherTexteLegal(args as { recherche: string; champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE"; type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOT"; limit?: number }, env);
+      return rechercherTexteLegal(args as { recherche: string; champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE"; type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOTS"; limit?: number }, env);
     case "rechercher_code_juridique":
-      return rechercherCodeJuridique(args as { recherche: string; code: string; champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE"; type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOT"; limit?: number }, env);
+      return rechercherCodeJuridique(args as { recherche: string; code: string; champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE"; type_recherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOTS"; limit?: number }, env);
     case "rechercher_jurisprudence":
       return rechercherJurisprudence(args as { recherche: string; juridiction?: "Cour de cassation" | "Cours d'appel" | "Toutes"; publie_bulletin?: boolean; limit?: number }, env);
     case "consulter_journal_officiel":
