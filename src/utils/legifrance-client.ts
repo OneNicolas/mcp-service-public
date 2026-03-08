@@ -185,7 +185,8 @@ export async function searchLoda(
   clientSecret: string,
   opts: LegifranceSearchOptions,
 ): Promise<string> {
-  const data = await pisteSearch(clientId, clientSecret, buildBody("LODA", opts));
+  // LODA_ETAT = textes en vigueur ; LODA_DATE = version historique
+  const data = await pisteSearch(clientId, clientSecret, buildBody("LODA_ETAT", opts));
   return formatResults(data, "texte_legal");
 }
 
@@ -195,7 +196,9 @@ export async function searchCode(
   clientSecret: string,
   opts: LegifranceSearchOptions,
 ): Promise<string> {
-  const data = await pisteSearch(clientId, clientSecret, buildBody("CODE", opts));
+  // CODE_ETAT = articles en vigueur ; CODE_DATE = version historique.
+  // On utilise CODE_ETAT par defaut (articles actuellement en vigueur).
+  const data = await pisteSearch(clientId, clientSecret, buildBody("CODE_ETAT", opts));
   return formatResults(data, "code");
 }
 
@@ -240,9 +243,11 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
 
   const filtres: Array<{ facette: string; valeur: string }> = [];
 
-  // Filtre nom de code (fond CODE)
+  // Filtre nom de code
+  // CODE_ETAT utilise TEXT_NOM_CODE ; CODE_DATE et autres fonds utilisent NOM_CODE
   if (codeName) {
-    filtres.push({ facette: "NOM_CODE", valeur: codeName });
+    const facetteCode = fond === "CODE_ETAT" ? "TEXT_NOM_CODE" : "NOM_CODE";
+    filtres.push({ facette: facetteCode, valeur: codeName });
   }
 
   // Filtre publication bulletin (fond JURI uniquement)
@@ -251,7 +256,7 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
   }
 
   // Filtre nature de texte (JORF/LODA) : LOI, DECRET, ARRETE, ORDONNANCE...
-  if (nature && (fond === "JORF" || fond === "LODA")) {
+  if (nature && (fond === "JORF" || fond === "LODA_ETAT" || fond === "LODA_DATE")) {
     filtres.push({ facette: "NATURE", valeur: nature.toUpperCase() });
   }
 
