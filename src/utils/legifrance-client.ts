@@ -79,7 +79,7 @@ interface PisteSearchBody {
   };
 }
 
-interface PisteResult {
+export interface PisteResult {
   id?: string;
   titre?: string;
   nature?: string;
@@ -309,7 +309,7 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
 // Formatters de sortie
 // -----------------------------------------------------------------------
 
-type ResultKind = "texte_legal" | "code" | "jurisprudence" | "jorf";
+export type ResultKind = "texte_legal" | "code" | "jurisprudence" | "jorf";
 
 function formatResults(data: PisteSearchResponse, kind: ResultKind): string {
   const rawResults = data.results ?? [];
@@ -336,7 +336,7 @@ function formatResults(data: PisteSearchResponse, kind: ResultKind): string {
 }
 
 /** Aplatit la structure CODE_ETAT / LODA_ETAT : results[].sections[].extracts[] -> PisteResult[] */
-function flattenCodeResults(results: PisteResult[]): PisteResult[] {
+export function flattenCodeResults(results: PisteResult[]): PisteResult[] {
   const flat: PisteResult[] = [];
   for (const item of results) {
     if (item.sections?.length) {
@@ -423,7 +423,7 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
   return lines.join("\n");
 }
 
-function buildLegiLink(r: PisteResult, kind: ResultKind): string | null {
+export function buildLegiLink(r: PisteResult, kind: ResultKind): string | null {
   switch (kind) {
     case "texte_legal": {
       const id = r.cid ?? r.id;
@@ -450,7 +450,7 @@ function buildLegiLink(r: PisteResult, kind: ResultKind): string | null {
  * Convertit un timestamp en millisecondes (champ dateTexte JURI) en date lisible.
  * Si la valeur n'est pas un nombre valide, la retourne telle quelle (deja une date).
  */
-function formatTimestampMs(ts: string | undefined): string {
+export function formatTimestampMs(ts: string | undefined): string {
   if (!ts) return "";
   const n = Number(ts);
   if (isNaN(n) || n === 0) return ts; // deja une string date
