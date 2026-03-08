@@ -27,6 +27,7 @@ import { rechercherJurisprudence } from "./rechercher-jurisprudence.js";
 import { consulterBudgetCommune } from "./consulter-budget-commune.js";
 import { rechercherSubvention } from "./rechercher-subvention.js";
 import { consulterSireneHistorique } from "./consulter-sirene-historique.js";
+import { rechercherOffreEmploi } from "./rechercher-offre-emploi.js";
 
 interface RechercherArgs {
   query: string;
@@ -61,7 +62,8 @@ export type QueryCategory =
   | "annonce_legale"
   | "budget_commune"
   | "subvention"
-  | "sirene_historique";
+  | "sirene_historique"
+  | "offre_emploi";
 
 /** Recherche unifiee : dispatche automatiquement vers la bonne source */
 export async function rechercher(
@@ -415,6 +417,15 @@ export async function rechercher(
       return prefixResult(result, "\uD83C\uDFED SIRENE — Entreprises (DINUM — API Recherche Entreprises)");
     }
 
+    case "offre_emploi": {
+      const cleanedQ = query
+        .replace(/\b(offre|offres|emploi|emplois|job|jobs|poste|postes|recrutement|recherche|cherche|trouver?|trouver?)\b/gi, "")
+        .replace(/\b(de|du|des|en|un|une|le|la|les|pour|a|dans)\b/gi, "")
+        .trim();
+      const result = await rechercherOffreEmploi({ mots_cles: cleanedQ.length >= 2 ? cleanedQ : query, limit }, env);
+      return prefixResult(result, "\uD83D\uDCBC Offres d'emploi (France Travail)");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -631,6 +642,20 @@ export function classifyQuery(query: string): QueryCategory {
   ];
   for (const pattern of subventionPatterns) {
     if (pattern.test(q)) return "subvention";
+  }
+
+  // T86 -- Patterns offres d'emploi (avant fiches_dila pour eviter confusion avec "emploi" generique)
+  const offreEmploiPatterns = [
+    /\boffres?\s+d.?emploi\b/,
+    /\brecherche\b.*\bemploi\b.*\b(cdi|cdd|interim|stage|apprentissage|alternance)\b/,
+    /\b(trouver?|cherche|postuler?)\b.*\b(job|emploi|poste|offre)\b/,
+    /\b(job|offre)\b.*\b(informatique|ingenieur|developpeur|comptable|commercial|infirmier|cuisinier)\b/,
+    /\bfrance\s*travail\b.*\b(offre|emploi|poste)\b/,
+    /\b(cdi|cdd|interim|alternance)\b.*\b(disponible|ouvert|recrute)\b/,
+    /\brecrute\b.*\b(cdi|cdd|interim|developpeur|ingenieur|cadre)\b/,
+  ];
+  for (const pattern of offreEmploiPatterns) {
+    if (pattern.test(q)) return "offre_emploi";
   }
 
   // T85d -- Patterns SIRENE historique

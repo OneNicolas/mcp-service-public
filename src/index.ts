@@ -38,7 +38,7 @@ import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOl
 import { renderDashboard } from "./admin/dashboard.js";
 import { generateOpenAPISpec } from "./admin/openapi.js";
 
-const VERSION = "1.13.0";
+const VERSION = "1.13.5";
 
 // Table stats initialisee au premier appel outil
 let statsTableReady = false;

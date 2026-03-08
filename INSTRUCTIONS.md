@@ -53,6 +53,12 @@ src/
 │   ├── rechercher-jurisprudence.ts         # Jurisprudence judiciaire via Legifrance proxy MCP
 │   ├── consulter-journal-officiel.ts       # Journal Officiel JORF via API PISTE (fond JORF, filtre nature/dates)
 │   ├── consulter-aide-sociale.ts           # Stats CAF allocataires RSA/APL/AAH/AF par commune/dept (data.caf.fr)
+│   ├── rechercher-marche-public.ts         # BOAMP avis marches publics (Opendatasoft DILA)
+│   ├── rechercher-annonce-legale.ts        # BODACC annonces legales (Opendatasoft DILA)
+│   ├── consulter-budget-commune.ts         # Budget primitif communes (data.gouv.fr Tabular OFGL)
+│   ├── rechercher-subvention.ts            # Subventions collectivites (data.gouv.fr Tabular)
+│   ├── consulter-sirene-historique.ts      # Entreprises SIRENE par NAF + zone (API Recherche Entreprises DINUM)
+│   └── rechercher-offre-emploi.ts          # Offres emploi France Travail OAuth2
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -70,11 +76,19 @@ src/
 │       ├── consulter-insertion-professionnelle.test.ts
 │       ├── consulter-securite.test.ts
 │       ├── consulter-risques-naturels.test.ts
-│       └── rechercher-legifrance.test.ts
+│       ├── rechercher-legifrance.test.ts
+│       ├── legifrance-client-internals.test.ts
+│       ├── rechercher-annonce-legale.test.ts
+│       ├── rechercher-marche-public.test.ts
+│       ├── consulter-budget-commune.test.ts
+│       ├── rechercher-subvention.test.ts
+│       ├── consulter-sirene-historique.test.ts
+│       └── rechercher-offre-emploi.test.ts
 ├── utils/
 │   ├── cache.ts              # cachedFetch avec timeout, retry 1x, FetchError
 │   ├── geo-api.ts            # resolveCodePostal, resolveNomCommune, resolveCodeInsee
-│   ├── legifrance-mcp.ts     # Proxy HTTP vers MCP Legifrance (openlegi.fr) — callLegifranceTool
+│   ├── legifrance-client.ts  # Client OAuth2 PISTE (searchLoda/searchCode/searchJuri/searchJorf)
+│   ├── suggest-alternative.ts # Suggestions d'outils similaires dans les erreurs
 │   └── stats.ts              # Logging appels outils + dashboard
 ├── admin/
 │   └── dashboard.ts      # Dashboard HTML admin
@@ -96,7 +110,7 @@ src/
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (21 categories : fiches, fiscalite, doctrine, DVF, simulation TF, frais notaire, zonage ABC, simulation IR, conventions, entreprises, education, resultats lycee, evaluations nationales, parcoursup, acces soins, insertion pro, securite, risques naturels, texte_legal, code_juridique, jurisprudence) |
+| 1 | `rechercher` | Dispatch unifie (29 categories : fiches, fiscalite, doctrine, DVF, simulation TF/notaire/IR, zonage ABC, conventions, entreprises, education, IVAL, parcoursup, acces soins, insertion pro, securite, risques naturels, texte_legal, code_juridique, jurisprudence, JORF, aide sociale, marche public, annonce legale, budget commune, subvention, SIRENE, offre emploi) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -126,6 +140,10 @@ src/
 | 28 | `consulter_aide_sociale` | Statistiques CAF par commune ou departement : foyers allocataires RSA/APL/AAH/AF/PA/CF... depuis 2020 (data.caf.fr CNAF) |
 | 29 | `rechercher_marche_public` | Recherche d'avis marches publics dans le BOAMP (appels d'offres, attributions, MAPA, DSP) — filtre type/dept/acheteur/dates (BOAMP DILA Opendatasoft) |
 | 30 | `rechercher_annonce_legale` | Recherche d'annonces legales dans le BODACC (immatriculations, radiations, cessions, procedures collectives) — filtre SIREN/nom/type/dept (BODACC DILA Opendatasoft) |
+| 31 | `consulter_budget_commune` | Budget primitif des communes : recettes/depenses totales, epargne brute/nette, encours de dette, euros/habitant (data.gouv.fr Tabular API — OFGL) |
+| 32 | `rechercher_subvention` | Subventions versees par collectivites et organismes publics (>23 000 EUR) — filtre beneficiaire/attribuant/objet/montant/annee (data.gouv.fr Tabular API) |
+| 33 | `consulter_sirene_historique` | Recherche d'entreprises SIRENE par secteur NAF/APE et zone geographique : etat (actif/cesse), dates creation et fermeture (API Recherche Entreprises DINUM) |
+| 34 | `rechercher_offre_emploi` | Recherche d'offres d'emploi actives via France Travail — filtre mots-cles, commune, departement, type contrat CDI/CDD/interim, qualification cadre/non-cadre |
 
 ## Historique des sprints
 
@@ -233,6 +251,48 @@ src/
 | T61 | 3 nouvelles categories dispatch : `texte_legal`, `code_juridique`, `jurisprudence` (21 categories total) |
 | T62 | Version bump v1.9.0 — 26 outils, 21 categories dispatch |
 
+### Sprint 17 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T63 | `LegifranceClient` OAuth2 PISTE — token cache module-level, `/search` multi-fonds, formatters (src/utils/legifrance-client.ts) |
+| T64 | Adapter `rechercher_texte_legal` — fond LODA via API PISTE officielle |
+| T65 | Adapter `rechercher_code_juridique` — fond CODE via API PISTE officielle |
+| T66 | Adapter `rechercher_jurisprudence` — fond JURI/CAPP via API PISTE officielle |
+| T67 | `types.ts` : ajout `PISTE_CLIENT_ID` / `PISTE_CLIENT_SECRET` dans Env |
+| T68 | Tests mis a jour — mock `searchLoda/searchCode/searchJuri` (legifrance-client.ts) |
+| T69 | Version bump v1.9.1 |
+
+### Sprint 18 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T70 | **Fix** : `pass env` dans `rechercher.ts` dispatcher pour les 3 outils Legifrance (texte_legal, code_juridique, jurisprudence) — *deploye* |
+| T71 | **Fix** : endpoint `DELETE /admin/stats` pour reset dashboard |
+| T72 | **Nouveau** : `consulter_journal_officiel` (JORF via API PISTE DILA — fond JORF, filtre nature/dates, searchJorf dans legifrance-client.ts) |
+| T74 | **Nouveau** : `consulter_aide_sociale` (stats CNAF — allocataires RSA/APL/AAH/AF/PA par commune/dept via data.caf.fr Opendatasoft v2.1) |
+| T75 | **Amelioration** : routing `rechercher.ts` — 2 nouvelles categories `journal_officiel` + `aide_sociale`, helper `extractTypeTexteJorf` |
+| T77 | **Qualite** : 36 tests rechercher-legifrance + 10 tests T72 JORF + routing T74/T75 (421 tests total, 0 echec) |
+| T79 | Version bump v1.10.0 — 28 outils, 23 categories dispatch |
+
+### Sprint 19 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T73 | **Nouveau** : `rechercher_marche_public` (BOAMP — appels d'offres, attributions, MAPA, DSP via boamp-datadila.opendatasoft.com) |
+| T76 | **Amelioration** : `comparer_communes` enrichi — IVAL meilleur lycee bac GT (taux reussite, VA, mentions) + aide sociale CAF dept (RSA/AL/AAH foyers) |
+| T80 | **Nouveau** : `rechercher_annonce_legale` (BODACC — immatriculations, radiations, cessions, procedures collectives via bodacc-datadila.opendatasoft.com) |
+| T81 | **Qualite** : 459 tests total (0 echec) — 11 tests BOAMP + 12 tests BODACC + 11 tests IVAL/CAF comparer + routing T73/T80 dans rechercher.ts |
+| T82 | Version bump v1.11.0 — 30 outils, 25 categories dispatch |
+
+### Sprint 20 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T83 | **DX** : 15 MCP prompts dans le handler `initialize` (exemples d'utilisation par categorie) |
+| T84 | **DX** : `src/utils/suggest-alternative.ts` — suggestions d'outils similaires dans les messages d'erreur |
+| T85a | **Nouveau** : `consulter_budget_commune` (budget primitif communes — recettes/depenses/epargne/dette via data.gouv.fr Tabular OFGL) |
+| T85b | **Nouveau** : `rechercher_subvention` (subventions collectivites >23 000 EUR — filtre beneficiaire/attribuant/objet/montant/annee via data.gouv.fr Tabular) |
+| T85c | **Nouveau** : `rechercher_offre_emploi` (offres actives France Travail OAuth2 — filtre mots-cles/commune/dept/contrat/qualification) |
+| T85d | **Nouveau** : `consulter_sirene_historique` (entreprises SIRENE par NAF + zone — etat actif/cesse, dates creation/fermeture via API Recherche Entreprises DINUM) |
+| Bump | Version v1.12.0 — 34 outils, 28 categories dispatch |
+
 ### Sprint 21 — Complete ✅
 | Tache | Description |
 |-------|-------------|
@@ -248,45 +308,14 @@ src/
 | T-LEG-2 | Fix `rechercher_jurisprudence` : champ `juridictionJudiciaire` (reel PISTE), conversion timestamp ms -> date lisible (`formatTimestampMs`), lien JURI utilise `r.id` (JURITEXT) |
 | Bump | Version v1.13.4 |
 
-### Sprint 23 — En cours
+### Sprint 23 — Complete ✅
 | Tache | Description |
 |-------|-------------|
 | T87 | Tests unitaires fonctions pures `legifrance-client.ts` : exports `flattenCodeResults`, `buildLegiLink`, `formatTimestampMs`, `PisteResult`, `ResultKind` + 22 tests dans `legifrance-client-internals.test.ts` |
+| T88 | Categorie `offre_emploi` dans `rechercher.ts` (29 categories total) — import, type union, case dispatch, patterns classifyQuery |
+| T89 | INSTRUCTIONS.md restructure : sprints dans l'ordre chronologique, Sprint 20 documente, table outils completee (34 entrees), architecture mise a jour |
+| T90 | Tests existants confirmes : budget_commune (10 tests), subvention (10 tests), offre_emploi (12 tests), sirene_historique (10 tests) |
 | Bump | Version v1.13.5 |
-
-### Sprint 19 — Complete ✅
-| Tache | Description |
-|-------|-------------|
-| T73 | **Nouveau** : `rechercher_marche_public` (BOAMP — appels d'offres, attributions, MAPA, DSP via boamp-datadila.opendatasoft.com) |
-| T76 | **Amelioration** : `comparer_communes` enrichi — IVAL meilleur lycee bac GT (taux reussite, VA, mentions) + aide sociale CAF dept (RSA/AL/AAH foyers) |
-| T80 | **Nouveau** : `rechercher_annonce_legale` (BODACC — immatriculations, radiations, cessions, procedures collectives via bodacc-datadila.opendatasoft.com) |
-| T81 | **Qualite** : 459 tests total (0 echec) — 11 tests BOAMP + 12 tests BODACC + 11 tests IVAL/CAF comparer + routing T73/T80 dans rechercher.ts |
-| T82 | Version bump v1.11.0 — 30 outils, 25 categories dispatch |
-
-### Sprint 18 — Complete ✅
-| Tache | Description |
-|-------|-------------|
-| T70 | **Fix** : `pass env` dans `rechercher.ts` dispatcher pour les 3 outils Legifrance (texte_legal, code_juridique, jurisprudence) — *deploye* |
-| T71 | **Fix** : endpoint `DELETE /admin/stats` pour reset dashboard |
-| T72 | **Nouveau** : `consulter_journal_officiel` (JORF via API PISTE DILA — fond JORF, filtre nature/dates, searchJorf dans legifrance-client.ts) |
-| T73 | **Skip** : `rechercher_marche_public` (BOAMP) — reporte sprint suivant |
-| T74 | **Nouveau** : `consulter_aide_sociale` (stats CNAF — allocataires RSA/APL/AAH/AF/PA par commune/dept via data.caf.fr Opendatasoft v2.1) |
-| T75 | **Amelioration** : routing `rechercher.ts` — 2 nouvelles categories `journal_officiel` + `aide_sociale`, helper `extractTypeTexteJorf` |
-| T76 | **Skip** : enrichir `comparer_communes` — reporte sprint suivant |
-| T77 | **Qualite** : 36 tests rechercher-legifrance + 10 tests T72 JORF + routing T74/T75 (421 tests total, 0 echec) |
-| T78 | **Skip** : DX — reporte sprint suivant |
-| T79 | Version bump v1.10.0 — 28 outils, 23 categories dispatch |
-
-### Sprint 17 — Complete ✅
-| Tache | Description |
-|-------|-------------|
-| T63 | `LegifranceClient` OAuth2 PISTE — token cache module-level, `/search` multi-fonds, formatters (src/utils/legifrance-client.ts) |
-| T64 | Adapter `rechercher_texte_legal` — fond LODA via API PISTE officielle |
-| T65 | Adapter `rechercher_code_juridique` — fond CODE via API PISTE officielle |
-| T66 | Adapter `rechercher_jurisprudence` — fond JURI/CAPP via API PISTE officielle |
-| T67 | `types.ts` : ajout `PISTE_CLIENT_ID` / `PISTE_CLIENT_SECRET` dans Env |
-| T68 | Tests mis a jour — mock `searchLoda/searchCode/searchJuri` (legifrance-client.ts) |
-| T69 | Version bump v1.9.1 |
 
 ## Contraintes techniques
 
