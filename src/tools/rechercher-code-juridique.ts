@@ -64,8 +64,9 @@ export async function rechercherCodeJuridique(args: CodeJuridiqueArgs, env?: Env
         isError: true,
       };
     }
+    const msg = err instanceof Error ? err.message : "inconnue";
     return {
-      content: [{ type: "text", text: "Erreur lors de la recherche dans les codes juridiques. Reessayez dans quelques instants." }],
+      content: [{ type: "text", text: `Erreur lors de la recherche dans les codes juridiques : ${msg}` }],
       isError: true,
     };
   }

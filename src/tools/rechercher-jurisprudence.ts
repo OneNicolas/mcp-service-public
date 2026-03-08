@@ -60,8 +60,9 @@ export async function rechercherJurisprudence(args: JurisprudenceArgs, env?: Env
     if (err instanceof LegifranceClientError) {
       return { content: [{ type: "text", text: `Legifrance indisponible : ${err.message}` }], isError: true };
     }
+    const msg = err instanceof Error ? err.message : "inconnue";
     return {
-      content: [{ type: "text", text: "Erreur lors de la recherche de jurisprudence. Reessayez dans quelques instants." }],
+      content: [{ type: "text", text: `Erreur lors de la recherche de jurisprudence : ${msg}` }],
       isError: true,
     };
   }

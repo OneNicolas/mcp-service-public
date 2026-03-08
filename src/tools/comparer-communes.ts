@@ -124,8 +124,13 @@ export async function comparerCommunes(args: ComparerCommunesArgs): Promise<Tool
 
     const dataResults = await Promise.allSettled(resolved.map((c) => fetchCommuneData(c.nom, c.code)));
     const communeDataList: CommuneData[] = [];
-    for (const result of dataResults) {
-      if (result.status === "fulfilled") communeDataList.push(result.value);
+    for (let i = 0; i < dataResults.length; i++) {
+      const result = dataResults[i];
+      if (result.status === "fulfilled") {
+        communeDataList.push(result.value);
+      } else {
+        console.error(`[comparer_communes] fetchCommuneData failed for ${resolved[i]?.nom ?? "?"}:`, result.reason);
+      }
     }
 
     if (communeDataList.length < 2) {
@@ -148,7 +153,11 @@ export async function comparerCommunes(args: ComparerCommunesArgs): Promise<Tool
 async function resolveInput(input: string): Promise<{ nom: string; code: string } | null> {
   const trimmed = input.trim();
   if (/^\d{5}$/.test(trimmed)) {
-    const communes = await resolveCodePostal(trimmed);
+    // Tenter d'abord comme code INSEE (ex: 69123 = Lyon) avant code postal
+    const inseeResult = await resolveCodeInsee(trimmed).catch(() => null);
+    if (inseeResult?.code) return { nom: inseeResult.nom, code: inseeResult.code };
+    // Fallback code postal
+    const communes = await resolveCodePostal(trimmed).catch(() => []);
     return communes.length > 0 ? { nom: communes[0].nom, code: communes[0].code } : null;
   }
   return resolveNomCommune(trimmed);

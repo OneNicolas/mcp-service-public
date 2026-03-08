@@ -147,6 +147,7 @@ async function pisteSearch(
 
   if (!res.ok) {
     const text = await res.text();
+    console.error(`[legifrance-client] PISTE HTTP ${res.status} — ${text.slice(0, 200)}`);
     throw new LegifranceClientError(`PISTE API erreur ${res.status} : ${text.slice(0, 300)}`);
   }
 
