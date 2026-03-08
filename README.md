@@ -1,6 +1,6 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.13.0-blue)
+![Version](https://img.shields.io/badge/version-1.13.1-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Tools](https://img.shields.io/badge/MCP%20tools-34-blueviolet)

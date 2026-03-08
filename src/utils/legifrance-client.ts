@@ -84,8 +84,8 @@ interface PisteResult {
   titre?: string;
   nature?: string;
   dateTexte?: string;
-  datePublicationJO?: string;
-  numero?: string;
+  datePubli?: string;     // JURI/LODA : date de publication
+  numero?: string;          // JORF : numero du texte
   // NOR (identifiant normalise des textes JORF)
   nor?: string;
   // Codes : numero d'article (alias PISTE : "num")
@@ -97,9 +97,9 @@ interface PisteResult {
   // Jurisprudence
   solution?: string;
   formation?: string;
-  numDecision?: string;
-  dateDecision?: string;
   juridiction?: string;
+  numeroAffaire?: string[];  // numero(s) d'affaire JURI
+  titreLong?: string;        // titre long LODA (fallback si titre est null)
   // Texte extrait
   extraits?: string[];
   // Sections imbriquees (CODE_ETAT) : contiennent les extracts/articles
@@ -367,13 +367,14 @@ function flattenCodeResults(results: PisteResult[]): PisteResult[] {
 function formatOneResult(r: PisteResult, kind: ResultKind): string {
   const lines: string[] = [];
 
-  if (r.titre) lines.push(`Titre : ${r.titre}`);
+  const titre = r.titre ?? r.titreLong;
+  if (titre) lines.push(`Titre : ${titre}`);
   if (r.nature) lines.push(`Nature : ${r.nature}`);
 
   if (kind === "texte_legal") {
-    if (r.numero) lines.push(`Numero : ${r.numero}`);
+    if (r.num) lines.push(`Numero : ${r.num}`);
     if (r.dateTexte) lines.push(`Date : ${r.dateTexte}`);
-    if (r.datePublicationJO) lines.push(`Publication JO : ${r.datePublicationJO}`);
+    if (r.datePubli) lines.push(`Publication JO : ${r.datePubli}`);
   }
 
   if (kind === "code") {
@@ -385,8 +386,10 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
   if (kind === "jurisprudence") {
     if (r.juridiction) lines.push(`Juridiction : ${r.juridiction}`);
     if (r.formation) lines.push(`Formation : ${r.formation}`);
-    if (r.numDecision) lines.push(`Numero : ${r.numDecision}`);
-    if (r.dateDecision) lines.push(`Date : ${r.dateDecision}`);
+    // numeroAffaire est un tableau cote PISTE, num est l'identifiant court
+    const numAffaire = r.num ?? r.numeroAffaire?.[0];
+    if (numAffaire) lines.push(`Numero : ${numAffaire}`);
+    if (r.dateTexte) lines.push(`Date : ${r.dateTexte}`);
     if (r.solution) lines.push(`Solution : ${r.solution}`);
   }
 
@@ -394,7 +397,7 @@ function formatOneResult(r: PisteResult, kind: ResultKind): string {
     if (r.numero) lines.push(`Numero : ${r.numero}`);
     if (r.nor) lines.push(`NOR : ${r.nor}`);
     if (r.dateTexte) lines.push(`Date : ${r.dateTexte}`);
-    if (r.datePublicationJO) lines.push(`Publication JO : ${r.datePublicationJO}`);
+    if (r.datePubli) lines.push(`Publication JO : ${r.datePubli}`);
   }
 
   // Extraits de texte

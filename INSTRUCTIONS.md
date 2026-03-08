@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.13.0
+- **Version actuelle** : v1.13.1
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -92,7 +92,7 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 30 outils actuels (v1.11.0)
+## Les 34 outils actuels (v1.13.1)
 
 | # | Outil | Description |
 |---|---|---|
@@ -232,6 +232,14 @@ src/
 | T60 | Nouveau tool `rechercher_jurisprudence` (Cour de cassation, cours d'appel, tribunaux via Legifrance) |
 | T61 | 3 nouvelles categories dispatch : `texte_legal`, `code_juridique`, `jurisprudence` (21 categories total) |
 | T62 | Version bump v1.9.0 — 26 outils, 21 categories dispatch |
+
+### Sprint 21 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| Fix | `comparer_communes` : resolveInput essaie d'abord resolveCodeInsee avant resolveCodePostal (codes INSEE 69123/38185/63113 mal resolus) |
+| Fix | `legifrance-client.ts` : fond CODE→CODE_ETAT, LODA→LODA_ETAT, filtres valeurs[] (tableau), sort PERTINENCE obligatoire, flattenCodeResults pour structure sections[].extracts[], champs reels extracts (values[], legalStatus) |
+| Fix | `legifrance-client.ts` formatter texte_legal/jurisprudence : champs reels JSON (num, dateTexte, datePubli, juridiction, numeroAffaire, titreLong) vs noms TS incorrects (numero, datePublicationJO, numDecision, dateDecision) |
+| Bump | Version v1.13.1 |
 
 ### Sprint 19 — Complete ✅
 | Tache | Description |
