@@ -117,6 +117,7 @@ async function pisteSearch(
 ): Promise<PisteSearchResponse> {
   const token = await getAccessToken(clientId, clientSecret);
 
+  const bodyStr = JSON.stringify(body);
   const res = await fetchWithTimeout(`${PISTE_API_BASE}/search`, {
     method: "POST",
     headers: {
@@ -124,7 +125,7 @@ async function pisteSearch(
       "Content-Type": "application/json",
       "Accept": "application/json",
     },
-    body: JSON.stringify(body),
+    body: bodyStr,
   });
 
   if (res.status === 401) {
@@ -147,7 +148,7 @@ async function pisteSearch(
 
   if (!res.ok) {
     const text = await res.text();
-    console.error(`[legifrance-client] PISTE HTTP ${res.status} — ${text.slice(0, 200)}`);
+    console.error(`[legifrance-client] PISTE HTTP ${res.status} — body: ${bodyStr.slice(0, 300)} — resp: ${text.slice(0, 200)}`);
     throw new LegifranceClientError(`PISTE API erreur ${res.status} : ${text.slice(0, 300)}`);
   }
 
