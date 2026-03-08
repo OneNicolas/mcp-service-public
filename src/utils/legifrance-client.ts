@@ -168,7 +168,22 @@ async function pisteSearch(
     throw new LegifranceClientError(`PISTE API erreur ${res.status} : ${text.slice(0, 300)}`);
   }
 
-  return res.json() as Promise<PisteSearchResponse>;
+  const json = await res.json() as PisteSearchResponse;
+  // Debug temporaire : inspecter la structure du 1er resultat
+  const r0 = json.results?.[0];
+  if (r0) {
+    const s0 = (r0 as Record<string, unknown>).sections;
+    if (Array.isArray(s0) && s0.length) {
+      const e0 = (s0[0] as Record<string, unknown>).extracts;
+      if (Array.isArray(e0) && e0.length) {
+        console.log(`[legifrance-client] DEBUG extract[0] keys: ${Object.keys(e0[0] as object).join(', ')}`);
+        console.log(`[legifrance-client] DEBUG extract[0]: ${JSON.stringify(e0[0]).slice(0, 400)}`);
+      } else {
+        console.log(`[legifrance-client] DEBUG result[0] keys: ${Object.keys(r0 as object).join(', ')}`);
+      }
+    }
+  }
+  return json;
 }
 
 // -----------------------------------------------------------------------
