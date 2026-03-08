@@ -71,7 +71,6 @@ interface PisteSearchBody {
     pageNum: number;
     pageSize: number;
     operateur: string;
-    sort: string;
     typePagination: string;
     // Filtres date (JORF/LODA) : format "YYYY-MM-DD"
     dateDebut?: string;
@@ -148,7 +147,7 @@ async function pisteSearch(
 
   if (!res.ok) {
     const text = await res.text();
-    console.error(`[legifrance-client] PISTE HTTP ${res.status} — body: ${bodyStr.slice(0, 300)} — resp: ${text.slice(0, 200)}`);
+    console.error(`[legifrance-client] PISTE HTTP ${res.status} — body: ${bodyStr} — resp: ${text.slice(0, 300)}`);
     throw new LegifranceClientError(`PISTE API erreur ${res.status} : ${text.slice(0, 300)}`);
   }
 
@@ -164,6 +163,7 @@ export interface LegifranceSearchOptions {
   champ?: "ALL" | "TITLE" | "ARTICLE" | "NUM_ARTICLE";
   typeRecherche?: "TOUS_LES_MOTS_DANS_UN_CHAMP" | "EXACTE" | "UN_DES_MOTS";
   pageSize?: number;
+  /** Tri des resultats — non utilise actuellement (retrait temporaire pour compatibilite PISTE) */
   sort?: "PERTINENCE" | "DATE_ASC" | "DATE_DESC";
   /** Filtre par nom de code (fond CODE uniquement) */
   codeName?: string;
@@ -231,7 +231,6 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
     champ = "ALL",
     typeRecherche = "TOUS_LES_MOTS_DANS_UN_CHAMP",
     pageSize = 10,
-    sort = "PERTINENCE",
     codeName,
     publicationBulletin,
     nature,
@@ -274,7 +273,6 @@ function buildBody(fond: string, opts: LegifranceSearchOptions): PisteSearchBody
       pageNum: 1,
       pageSize: Math.min(pageSize, 20),
       operateur: "ET",
-      sort,
       typePagination: "DEFAUT",
     },
   };
