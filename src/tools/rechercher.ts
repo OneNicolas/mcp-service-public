@@ -624,6 +624,8 @@ export function classifyQuery(query: string): QueryCategory {
   const budgetCommunePatterns = [
     /\bbudget\b.*\b(commune|ville|municipal)\b/,
     /\b(commune|ville)\b.*\bbudget\b/,
+    /\bbudget\s+(primitif|supplementaire|communal|municipal|annuel)\b/,
+    /\bbudget\b.*\b(primitif|supplementaire|communal|municipal|annuel)\b/,
     /\b(recettes?|depenses?|epargne\s+brute|encours\s+de\s+dette|annuite\s+de\s+la\s+dette)\b.*\b(commune|ville|municipal)\b/,
     /\b(commune|ville)\b.*\b(recettes?|depenses?|epargne\s+brute|encours\s+de\s+dette)\b/,
     /\bfinances?\s+(locales?|municipales?|communales?)\b/,
@@ -636,9 +638,11 @@ export function classifyQuery(query: string): QueryCategory {
 
   // T85b -- Patterns subventions
   const subventionPatterns = [
-    /\bsubvention(s)?\b.*\b(association|organisme|beneficiaire|versee?|attribuee?)\b/,
-    /\b(association|organisme)\b.*\bsubvention(s)?\b/,
-    /\b(montant|attribution|versement)\b.*\bsubvention(s)?\b/,
+    /\bsubventions?\b.*\b(associations?|organismes?|beneficiaires?|versee?s?|attribuee?s?)\b/,
+    /\b(associations?|organismes?)\b.*\bsubventions?\b/,
+    /\b(montant|attribution|versement)s?\b.*\bsubventions?\b/,
+    /\bsubventions?\b.*\b(collectivite|commune|departement|region|epci)\b/,
+    /\b(collectivite|commune|departement|region|epci)\b.*\bsubventions?\b/,
   ];
   for (const pattern of subventionPatterns) {
     if (pattern.test(q)) return "subvention";
@@ -663,7 +667,9 @@ export function classifyQuery(query: string): QueryCategory {
     /\b(creation|creations?\s+d.entreprises?|nouvelles?\s+entreprises?)\b.*\b(secteur|naf|ape|commune|departement|ville)\b/,
     /\b(radiation|cessation|fermeture)\b.*\b(entreprises?|societes?|etablissements?)\b.*\b(secteur|commune|departement)\b/,
     /\bhistorique\b.*\b(sirene|entreprise|creation|cessation)\b/,
-    /\bcombien\b.*\b(entreprises?|societes?)\b.*\b(crees?|ouvert|ferme|cess)\b/,
+    /\bcombien\b.*\b(entreprises?|societes?)\b.*\b(creee?s?|ouvert|ferme|cess)/,
+    /\b(entreprises?|societes?)\b.*\b(creee?s?|radiee?s?|cessees?)\b.*\b(secteur|naf|commune|departement|paris|lyon|france)\b/,
+    /\bsecteur\b.*\b(informatique|commerce|restauration|batiment|sante|industrie)\b.*\b(entreprises?|societes?)\b/,
   ];
   for (const pattern of sireneHistoriquePatterns) {
     if (pattern.test(q)) return "sirene_historique";

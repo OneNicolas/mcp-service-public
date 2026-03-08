@@ -805,3 +805,48 @@ describe("extractTypeTexteJorf", () => {
     expect(extractTypeTexteJorf("JORF teletravail")).toBeNull();
   });
 });
+
+// T85a -- classifyQuery : budget_commune (corrections Sprint 24)
+describe("classifyQuery -- budget_commune", () => {
+  it("detecte le budget primitif", () => {
+    expect(classifyQuery("Quel est le budget primitif de Nantes ?")).toBe("budget_commune");
+    expect(classifyQuery("budget primitif 2024 commune")).toBe("budget_commune");
+    expect(classifyQuery("budget supplementaire Lyon")).toBe("budget_commune");
+    expect(classifyQuery("budget communal de Paris")).toBe("budget_commune");
+  });
+
+  it("detecte les formulations classiques", () => {
+    expect(classifyQuery("budget de la commune de Bordeaux")).toBe("budget_commune");
+    expect(classifyQuery("finances locales Nantes")).toBe("budget_commune");
+    expect(classifyQuery("OFGL comptes communes")).toBe("budget_commune");
+  });
+});
+
+// T85b -- classifyQuery : subvention (corrections Sprint 24)
+describe("classifyQuery -- subvention", () => {
+  it("detecte les pluriels et feminins", () => {
+    expect(classifyQuery("Quelles subventions ont ete attribuees a des associations culturelles ?")).toBe("subvention");
+    expect(classifyQuery("Les organismes publics versent des subventions")).toBe("subvention");
+    expect(classifyQuery("subventions attribuees a des associations sportives")).toBe("subvention");
+  });
+
+  it("detecte les formulations classiques", () => {
+    expect(classifyQuery("montant des subventions accordees")).toBe("subvention");
+    expect(classifyQuery("subventions versees par la commune")).toBe("subvention");
+    expect(classifyQuery("subventions departement Rhone")).toBe("subvention");
+  });
+});
+
+// T85d -- classifyQuery : sirene_historique (corrections Sprint 24)
+describe("classifyQuery -- sirene_historique", () => {
+  it("detecte le feminin pluriel de cree", () => {
+    expect(classifyQuery("Combien d'entreprises ont ete creees dans le secteur informatique a Paris ?")).toBe("sirene_historique");
+    expect(classifyQuery("entreprises creees dans le departement 75")).toBe("sirene_historique");
+  });
+
+  it("detecte les formulations classiques", () => {
+    expect(classifyQuery("creation d'entreprises secteur batiment")).toBe("sirene_historique");
+    expect(classifyQuery("historique SIRENE creation")).toBe("sirene_historique");
+    expect(classifyQuery("combien d'entreprises ouvertes a Lyon")).toBe("sirene_historique");
+  });
+});

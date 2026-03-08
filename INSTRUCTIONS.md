@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.13.5
+- **Version actuelle** : v1.13.6
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -106,7 +106,7 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 34 outils actuels (v1.13.5)
+## Les 34 outils actuels (v1.13.6)
 
 | # | Outil | Description |
 |---|---|---|
@@ -316,6 +316,15 @@ src/
 | T89 | INSTRUCTIONS.md restructure : sprints dans l'ordre chronologique, Sprint 20 documente, table outils completee (34 entrees), architecture mise a jour |
 | T90 | Tests existants confirmes : budget_commune (10 tests), subvention (10 tests), offre_emploi (12 tests), sirene_historique (10 tests) |
 | Bump | Version v1.13.5 |
+
+### Sprint 24 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T1 | Correction `subventionPatterns` dans `classifyQuery` : pluriels/feminins (associations, organismes, attribuees) + patterns geo (collectivite, region, epci) — 3→5 patterns |
+| T2 | Correction `sireneHistoriquePatterns` dans `classifyQuery` : feminin pluriel "creees" + pattern secteur+geo + pattern secteur+entreprises — 4→6 patterns |
+| T3 | Correction `budgetCommunePatterns` dans `classifyQuery` : ajout patterns "budget primitif/supplementaire/communal/annuel" |
+| T4 | Ajout tests dispatcher dans `rechercher.test.ts` : 3 describes (budget_commune, subvention, sirene_historique) — 14 nouveaux tests |
+| Bump | Version v1.13.6 |
 
 ## Contraintes techniques
 
