@@ -34,6 +34,7 @@ import { consulterBudgetCommune } from "./tools/consulter-budget-commune.js";
 import { consulterBudgetEpci } from "./tools/consulter-budget-epci.js";
 import { rechercherSubvention } from "./tools/rechercher-subvention.js";
 import { consulterSireneHistorique } from "./tools/consulter-sirene-historique.js";
+import { consulterPrixCarburant } from "./tools/consulter-prix-carburant.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
 import { ensureStatsTable, logToolCall, summarizeArgs, getDashboardData, purgeOldStats } from "./utils/stats.js";
 import { renderDashboard } from "./admin/dashboard.js";
@@ -573,6 +574,21 @@ const TOOLS = [
     },
   },
   {
+    name: "consulter_prix_carburant",
+    description:
+      "Prix des carburants en temps reel pour un departement ou une commune. Retourne les stations triees par prix croissant avec Gazole, SP95, SP98, E10, E85, GPLc et indicateur automate 24/24. Source : data.economie.gouv.fr (flux instantane, MAJ toutes les 10 min).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        departement: { type: "string", description: "Numero ou nom du departement (ex: '69', 'Rhone', '13')" },
+        commune: { type: "string", description: "Nom de la commune (ex: 'Lyon', 'Bordeaux')" },
+        code_postal: { type: "string", description: "Code postal (ex: '69001')" },
+        carburant: { type: "string", enum: ["Gazole", "SP95", "SP98", "E10", "E85", "GPLc"], description: "Type de carburant a filtrer et trier (optionnel — tous les prix affiches si absent)" },
+        limit: { type: "number", description: "Nombre de stations (1-20, defaut 10)" },
+      },
+    },
+  },
+  {
     name: "rechercher_jurisprudence",
     description:
       "Recherche de jurisprudence judiciaire francaise : arrets de la Cour de cassation et cours d'appel. Retourne les decisions avec juridiction, formation, solution et lien Legifrance. Source : API Legifrance officielle (PISTE/DILA).",
@@ -667,6 +683,8 @@ async function executeTool(
       return rechercherAnnonceLegale(args as { recherche?: string; nom_entreprise?: string; siren?: string; type_annonce?: "vente_cession" | "immatriculation" | "radiation" | "procedure_collective" | "modification"; departement?: string; date_debut?: string; date_fin?: string; limit?: number }, env);
     case "rechercher_offre_emploi":
       return rechercherOffreEmploi(args as { mots_cles?: string; commune?: string; code_postal?: string; departement?: string; type_contrat?: string; qualification?: "cadre" | "non-cadre"; limit?: number }, env);
+    case "consulter_prix_carburant":
+      return consulterPrixCarburant(args as { departement?: string; commune?: string; code_postal?: string; carburant?: string; limit?: number });
     default:
       return { content: [{ type: "text", text: `Outil inconnu: ${name}` }], isError: true };
   }
@@ -858,10 +876,16 @@ async function handleMcpPost(request: Request, env: Env, ctx: ExecutionContext):
           "   - Aide sociale : consulter_aide_sociale (stats CAF — allocataires RSA/APL/AAH/AF par commune ou dept)",
           "   - Marches publics : rechercher_marche_public (BOAMP — appels d'offres, attributions, MAPA par mots-cles/dept/acheteur)",
           "   - Budget communes : consulter_budget_commune (OFGL 2017-2024 — recettes, depenses, epargne brute, encours dette par commune)",
+          "   - Budget EPCI : consulter_budget_epci (OFGL 2017-2024 — budget des intercommunalites, communautes de communes/agglomeration, metropoles)",
+          "   - Evaluations nationales : consulter_evaluations_nationales (resultats CE2/6e par departement)",
+          "   - Textes legaux : rechercher_texte_legal (Legifrance — lois, decrets, arretes par mots-cles ou reference NOR)",
+          "   - Codes juridiques : rechercher_code_juridique (Legifrance — articles de code, recherche dans Code civil, Code du travail, etc.)",
+          "   - Jurisprudence : rechercher_jurisprudence (Legifrance — arrets Cour de cassation, Conseil d'Etat, juridictions administratives)",
           "   - Subventions : rechercher_subvention (data.gouv.fr — subventions collectivites locales > 23 000 EUR, par beneficiaire/attribuant)",
           "   - Entreprises SIRENE : consulter_sirene_historique (creations/cessations par secteur NAF, commune ou departement)",
           "   - Offres emploi : rechercher_offre_emploi (France Travail — offres actives par mots-cles, commune, departement, type contrat CDI/CDD/interim)",
           "   - Annonces legales : rechercher_annonce_legale (BODACC — immatriculations, radiations, cessions, procedures collectives par SIREN/nom)",
+          "   - Prix carburants : consulter_prix_carburant (flux temps reel — stations par departement/commune, tri par prix, Gazole/SP95/SP98/E10/E85/GPLc)",
           "",
           "PARAMETRES IMPORTANTS :",
           "- Les communes acceptent un nom, un code postal ou un code INSEE.",

@@ -28,6 +28,7 @@ import { consulterBudgetCommune } from "./consulter-budget-commune.js";
 import { consulterBudgetEpci } from "./consulter-budget-epci.js";
 import { rechercherSubvention } from "./rechercher-subvention.js";
 import { consulterSireneHistorique } from "./consulter-sirene-historique.js";
+import { consulterPrixCarburant } from "./consulter-prix-carburant.js";
 import { rechercherOffreEmploi } from "./rechercher-offre-emploi.js";
 
 interface RechercherArgs {
@@ -39,6 +40,7 @@ export type QueryCategory =
   | "fiscalite_locale"
   | "doctrine_bofip"
   | "fiches_dila"
+  | "prix_carburant"
   | "transactions_dvf"
   | "simulation_tf"
   | "simulation_frais_notaire"
@@ -438,6 +440,18 @@ export async function rechercher(
       return prefixResult(result, "\uD83D\uDCBC Offres d'emploi (France Travail)");
     }
 
+    case "prix_carburant": {
+      // Extraire departement ou commune depuis la requete
+      const deptMatch = query.match(/\b(\d{2,3}|\d{2}[AB])\b/);
+      const deptNum = deptMatch?.[1];
+      const result = await consulterPrixCarburant({
+        departement: deptNum ?? undefined,
+        commune: deptNum ? undefined : query,
+        limit,
+      });
+      return prefixResult(result, "⛽ Prix carburants");
+    }
+
     case "fiches_dila": {
       const result = await rechercherFiche({ query, limit }, env);
       return prefixResult(result, "📋 Fiches pratiques (service-public.fr)");
@@ -550,8 +564,9 @@ export function classifyQuery(query: string): QueryCategory {
     /\bprimo.?install(ation|e)s?\b.*\b(medecin|generaliste)s?\b/,
     /\bdemographie\s+(medicale|sanitaire)\b/,
     /\boffre\s+de\s+soins?\b/,
-    /\b(ophtalmologue|dermatologue|cardiologue|pediatre|gynecologue|psychiatre)s?\b.*\b(nombre|effectif|densite)\b/,
-    /\b(nombre|effectif|densite)\b.*\b(ophtalmologue|dermatologue|cardiologue|pediatre|gynecologue|psychiatre)s?\b/,
+    /\b(ophtalmologue|ophtalmologiste|ophtalmo|dermatologue|cardiologue|pediatre|gynecologue|psychiatre)s?\b.*\b(nombre|effectif|densite|combien)\b/,
+    /\b(nombre|effectif|densite|combien)\b.*\b(ophtalmologue|ophtalmologiste|ophtalmo|dermatologue|cardiologue|pediatre|gynecologue|psychiatre)s?\b/,
+    /\bcombien\s+(de\s+|d.)(medecin|generaliste|ophtalmologue|ophtalmologiste|ophtalmo|dermatologue|cardiologue|pediatre|gynecologue|psychiatre)s?\b/,
   ];
 
   for (const pattern of accesSoinsPatterns) {
@@ -667,6 +682,9 @@ export function classifyQuery(query: string): QueryCategory {
     /\b(montant|attribution|versement)s?\b.*\bsubventions?\b/,
     /\bsubventions?\b.*\b(collectivite|commune|departement|region|epci)\b/,
     /\b(collectivite|commune|departement|region|epci)\b.*\bsubventions?\b/,
+    /\baides?\s+(financieres?|publiques?)\b.*\b(mairie|commune|collectivite|ville|departement|region|epci)\b/,
+    /\b(mairie|commune|ville|collectivite|departement|region)\b.*\baides?\s+(financieres?|publiques?)\b/,
+    /\b(aides?|financement)\b.*\b(verse|attribue|accorde)\b.*\b(mairie|commune|ville|collectivite|departement|region)\b/,
   ];
   for (const pattern of subventionPatterns) {
     if (pattern.test(q)) return "subvention";
@@ -681,6 +699,8 @@ export function classifyQuery(query: string): QueryCategory {
     /\bfrance\s*travail\b.*\b(offre|emploi|poste)\b/,
     /\b(cdi|cdd|interim|alternance)\b.*\b(disponible|ouvert|recrute)\b/,
     /\brecrute\b.*\b(cdi|cdd|interim|developpeur|ingenieur|cadre)\b/,
+    /\bemplois?\s+(disponibles?|ouverts?|a\s+pourvoir)\b/,
+    /\bpostes?\s+(disponibles?|ouverts?|a\s+pourvoir)\b/,
   ];
   for (const pattern of offreEmploiPatterns) {
     if (pattern.test(q)) return "offre_emploi";
@@ -694,6 +714,8 @@ export function classifyQuery(query: string): QueryCategory {
     /\bcombien\b.*\b(entreprises?|societes?)\b.*\b(creee?s?|ouvert|ferme|cess)/,
     /\b(entreprises?|societes?)\b.*\b(creee?s?|radiee?s?|cessees?)\b.*\b(secteur|naf|commune|departement|paris|lyon|france)\b/,
     /\bsecteur\b.*\b(informatique|commerce|restauration|batiment|sante|industrie)\b.*\b(entreprises?|societes?)\b/,
+    /\bcombien\b.*\b(creee?s?|ouvertes?|ouverts?|fermees?|fermes?)\b.*\b(en\s+\d{4}|secteur|a\s+[a-z])\b/,
+    /\b(boulangerie|pharmacie|restaurant|coiffeur|epicerie|librairie|boutique|hotel|cafe|salon)s?\b.*\b(creee?s?|ouverts?|ouvertes?|fermes?|cess)\b/,
   ];
   for (const pattern of sireneHistoriquePatterns) {
     if (pattern.test(q)) return "sirene_historique";
@@ -900,6 +922,18 @@ export function classifyQuery(query: string): QueryCategory {
   const fiscKeywords = ["impot", "fiscal", "taxe", "tva", "deduction", "exoneration", "plus-value", "amortissement"];
   const fiscCount = fiscKeywords.filter((k) => q.includes(k)).length;
   if (fiscCount >= 2) return "doctrine_bofip";
+
+  // T26-T4 -- Patterns prix carburant (avant fiches_dila)
+  const prixCarburantPatterns = [
+    /\b(prix|tarif)\b.*\b(carburant|essence|gazole|diesel|sp95|sp98|e10|e85|gplc)\b/,
+    /\b(carburant|essence|gazole|diesel|sp95|sp98|e10|e85|gplc)\b.*\b(prix|tarif|moins\s+cher|pas\s+cher)\b/,
+    /\b(station|pompe)\b.*\b(carburant|essence|moins\s+cher)\b/,
+    /\b(ou\s+faire\s+le\s+plein|plein\s+d.essence)\b/,
+    /\bstations?-?service\b.*\b(prix|carburant|essence)\b/,
+  ];
+  for (const pattern of prixCarburantPatterns) {
+    if (pattern.test(q)) return "prix_carburant";
+  }
 
   return "fiches_dila";
 }

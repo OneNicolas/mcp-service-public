@@ -281,3 +281,36 @@ export async function consulterBudgetCommune(args: BudgetCommuneArgs): Promise<T
 
 // Export for comparer_communes integration (future use)
 export { AGREGATS_NORMALISES };
+
+export interface BudgetCompareData {
+  epargneBrute: number | null;
+  encoursDette: number | null;
+  epargneBruteEph: number | null;
+  encoursDetteEph: number | null;
+  annee: string | null;
+}
+
+/** Recupere epargne brute et encours de dette (derniere annee) pour comparaison de communes */
+export async function fetchBudgetForCompare(codeInsee: string): Promise<BudgetCompareData | null> {
+  try {
+    const rows = await fetchBudgetData(codeInsee);
+    if (rows.length === 0) return null;
+
+    const pivot = pivotByYear(rows);
+    const annees = [...pivot.keys()].sort((a, b) => b.localeCompare(a));
+    const latestAnnee = annees[0];
+    if (!latestAnnee) return null;
+
+    const yearMap = pivot.get(latestAnnee)!;
+    const epargneBrute = getVal(yearMap, "Epargne brute");
+    const encoursDette = getVal(yearMap, "Encours de dette");
+    const epargneBruteEph = getEph(yearMap, "Epargne brute");
+    const encoursDetteEph = getEph(yearMap, "Encours de dette");
+
+    if (epargneBrute === null && encoursDette === null) return null;
+
+    return { epargneBrute, encoursDette, epargneBruteEph, encoursDetteEph, annee: latestAnnee };
+  } catch {
+    return null;
+  }
+}

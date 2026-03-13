@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.13.7
+- **Version actuelle** : v1.13.8
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -59,6 +59,7 @@ src/
 │   ├── rechercher-subvention.ts            # Subventions collectivites (data.gouv.fr Tabular)
 │   ├── consulter-sirene-historique.ts      # Entreprises SIRENE par NAF + zone (API Recherche Entreprises DINUM)
 │   └── rechercher-offre-emploi.ts          # Offres emploi France Travail OAuth2
+│   └── consulter-prix-carburant.ts         # Prix carburants temps reel (data.economie.gouv.fr)
 │   └── __tests__/                          # Tests unitaires vitest
 │       ├── simuler-taxe-fonciere.test.ts
 │       ├── rechercher.test.ts
@@ -106,11 +107,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 35 outils actuels (v1.13.7)
+## Les 36 outils actuels (v1.13.8)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (30 categories : fiches, fiscalite, doctrine, DVF, simulation TF/notaire/IR, zonage ABC, conventions, entreprises, education, IVAL, parcoursup, acces soins, insertion pro, securite, risques naturels, texte_legal, code_juridique, jurisprudence, JORF, aide sociale, marche public, annonce legale, budget EPCI, budget commune, subvention, SIRENE, offre emploi) |
+| 1 | `rechercher` | Dispatch unifie (31 categories : fiches, fiscalite, doctrine, DVF, simulation TF/notaire/IR, zonage ABC, conventions, entreprises, education, IVAL, parcoursup, acces soins, insertion pro, securite, risques naturels, texte_legal, code_juridique, jurisprudence, JORF, aide sociale, marche public, annonce legale, budget EPCI, budget commune, subvention, SIRENE, offre emploi, prix carburant) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -145,6 +146,7 @@ src/
 | 33 | `rechercher_subvention` | Subventions versees par collectivites et organismes publics (>23 000 EUR) — filtre beneficiaire/attribuant/objet/montant/annee (data.gouv.fr Tabular API) |
 | 34 | `consulter_sirene_historique` | Recherche d'entreprises SIRENE par secteur NAF/APE et zone geographique : etat (actif/cesse), dates creation et fermeture (API Recherche Entreprises DINUM) |
 | 35 | `rechercher_offre_emploi` | Recherche d'offres d'emploi actives via France Travail — filtre mots-cles, commune, departement, type contrat CDI/CDD/interim, qualification cadre/non-cadre |
+| 36 | `consulter_prix_carburant` | Prix des carburants en temps reel par departement ou commune — stations triees par prix croissant, Gazole/SP95/SP98/E10/E85/GPLc, automate 24/24 (data.economie.gouv.fr, MAJ toutes les 10 min) |
 
 ## Historique des sprints
 
@@ -335,6 +337,15 @@ src/
 | T4 | Disclaimer geographique dans `formatSireneReport` : note siege social SIREN vs etablissements SIRET |
 | T5 | Fix `comparer_communes` DVF : parallelisation `Promise.allSettled`, `timeout: 8_000` par appel, cap arrondissements PLM a 2 |
 | Bump | Version v1.13.7 — 35 outils, 30 categories dispatch, ~550 tests |
+
+### Sprint 26 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T1 | QA dispatcher `classifyQuery` : 6 edge cases corriges (ophtalmo, aides financieres, emplois disponibles, boulangeries creees, risque seisme, budget CdC) — 4 blocs patterns enrichis, 14 nouveaux tests |
+| T2 | `INSTRUCTIONS.md` dans `src/index.ts` : ajout `consulter_budget_epci` + 4 outils manquants (evaluations nationales, texte legal, code juridique, jurisprudence) — 35 outils tous documentes |
+| T3 | Enrichir `comparer_communes` : colonnes OFGL epargne brute + encours dette (euros/hab) — `fetchBudgetForCompare` exporte depuis `consulter-budget-commune.ts` |
+| T4 | Nouveau outil `consulter_prix_carburant` (flux temps reel data.economie.gouv.fr, filtre dept/commune/CP, tri par prix, 6 carburants) + dispatcher `prix_carburant` (31 categories) |
+| Bump | Version v1.13.8 — 36 outils, 31 categories dispatch |
 
 ## Contraintes techniques
 

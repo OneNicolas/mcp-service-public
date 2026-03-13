@@ -4,6 +4,7 @@ import { fetch6emeScores, extractDeptFromInsee } from "./consulter-evaluations-n
 import { fetchSecuriteData } from "./consulter-securite.js";
 import { fetchRisques, fetchCatNat } from "./consulter-risques-naturels.js";
 import { fetchAideSocialeForCompare, type AideSocialeCompareData } from "./consulter-aide-sociale.js";
+import { fetchBudgetForCompare, type BudgetCompareData } from "./consulter-budget-commune.js";
 import { fetchIvalForCompare, type IvalCompareData } from "./consulter-resultats-lycee.js";
 import { cachedFetch, CACHE_TTL } from "../utils/cache.js";
 
@@ -82,6 +83,7 @@ interface CommuneData {
   risques: RisquesCompareData | null;
   ival: IvalCompareData | null;
   aideSociale: AideSocialeCompareData | null;
+  budget: BudgetCompareData | null;
 }
 
 export async function comparerCommunes(args: ComparerCommunesArgs): Promise<ToolResult> {
@@ -166,7 +168,7 @@ async function resolveInput(input: string): Promise<{ nom: string; code: string 
 async function fetchCommuneData(nom: string, code: string): Promise<CommuneData> {
   const codeDept = extractDeptFromInsee(code);
 
-  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult, santeResult, securiteResult, risquesResult, ivalResult, aideSocialeResult] = await Promise.allSettled([
+  const [reiResult, dvfAppartResult, dvfMaisonResult, zonageResult, servicesResult, educationResult, geoResult, scores6emeResult, collegesResult, santeResult, securiteResult, risquesResult, ivalResult, aideSocialeResult, budgetResult] = await Promise.allSettled([
     fetchREI(code),
     fetchDvfMedianPrixM2(code, "Appartement"),
     fetchDvfMedianPrixM2(code, "Maison"),
@@ -181,6 +183,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     fetchRisquesForCompare(code),
     fetchIvalForCompare(code),
     fetchAideSocialeForCompare(codeDept),
+    fetchBudgetForCompare(code),
   ]);
 
   const rei = reiResult.status === "fulfilled" ? reiResult.value : null;
@@ -197,6 +200,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
   const risques = risquesResult.status === "fulfilled" ? risquesResult.value : null;
   const ival = ivalResult.status === "fulfilled" ? ivalResult.value : null;
   const aideSociale = aideSocialeResult.status === "fulfilled" ? aideSocialeResult.value : null;
+  const budget = budgetResult.status === "fulfilled" ? budgetResult.value : null;
 
   // Densite = population / (surface en hectares / 100) = hab/km2
   const population = geo?.population ?? null;
@@ -223,6 +227,7 @@ async function fetchCommuneData(nom: string, code: string): Promise<CommuneData>
     risques,
     ival,
     aideSociale,
+    budget,
   };
 }
 
@@ -636,6 +641,10 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
   lines.push(`| \u26A0\uFE0F Risques naturels | ${data.map((d) => d.risques ? `${d.risques.nbRisques} identifie(s)` : "N/A").join(" | ")} |`);
   lines.push(`| \u26A0\uFE0F Arretes CatNat | ${data.map((d) => d.risques ? String(d.risques.nbCatNat) : "N/A").join(" | ")} |`);
   lines.push(`| Intercommunalite | ${data.map((d) => d.intercommunalite ?? "N/A").join(" | ")} |`);
+  // T26-T3 -- Budget OFGL communes
+  const anneeOfgl = data.find(d => d.budget?.annee)?.budget?.annee ?? "";
+  lines.push(`| 💰 Epargne brute ${anneeOfgl ? `(${anneeOfgl})` : ""} | ${data.map((d) => d.budget?.epargneBruteEph != null ? `${d.budget.epargneBruteEph.toFixed(0)} €/hab` : "N/A").join(" | ")} |`);
+  lines.push(`| 💰 Encours dette ${anneeOfgl ? `(${anneeOfgl})` : ""} | ${data.map((d) => d.budget?.encoursDetteEph != null ? `${d.budget.encoursDetteEph.toFixed(0)} €/hab` : "N/A").join(" | ")} |`);
   // T76 -- IVAL meilleur lycee GT de la commune
   lines.push(`| \uD83C\uDFEB Meilleur lyc\u00E9e bac (commune) | ${data.map((d) => d.ival ? `${d.ival.nomLycee} (${d.ival.tauxReussite.toFixed(1)}%${d.ival.valeurAjoutee != null ? `, VA ${d.ival.valeurAjoutee > 0 ? "+" : ""}${d.ival.valeurAjoutee}` : ""})` : "N/A").join(" | ")} |`);
   lines.push(`| \uD83C\uDFEB Taux mentions bac (commune) | ${data.map((d) => d.ival ? `${d.ival.tauxMentions.toFixed(1)}% (${d.ival.annee})` : "N/A").join(" | ")} |`);
@@ -717,6 +726,12 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
       lines.push(`  \uD83C\uDFC6 Meilleur score scolaire (dept) : **${best.nom}** (moy. ${Math.round((best.scores6eme!.scoreFrancais + best.scores6eme!.scoreMaths) / 2)})`);
     }
   }
+  // T26-T3 -- Point cle epargne brute OFGL
+  const withBudget = data.filter((d) => d.budget?.epargneBruteEph != null);
+  if (withBudget.length >= 2) {
+    const bestBudget = withBudget.reduce((a, b) => (a.budget!.epargneBruteEph ?? -Infinity) > (b.budget!.epargneBruteEph ?? -Infinity) ? a : b);
+    lines.push(`  💰 Meilleure epargne brute : **${bestBudget.nom}** (${bestBudget.budget!.epargneBruteEph!.toFixed(0)} €/hab${anneeOfgl ? ` en ${anneeOfgl}` : ""})`);
+  }
   // T76 -- Point cle IVAL meilleur lycee bac
   const withIval = data.filter((d) => d.ival !== null && d.ival.tauxReussite > 0);
   if (withIval.length >= 2) {
@@ -747,7 +762,7 @@ function buildComparisonReport(data: CommuneData[], errors: string[]): string {
     lines.push("");
   }
 
-  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales (IVAL) + Carte scolaire DEPP via data.education.gouv.fr, CNAM via data.ameli.fr (sante), SSMSI via data.gouv.fr (securite), Georisques BRGM/MTE (risques), CNAF data.caf.fr (aide sociale)_");
+  lines.push("_Sources : geo.api.gouv.fr (population/surface), DGFiP REI via data.economie.gouv.fr, DVF via data.gouv.fr, zonage ABC Min. Transition ecologique, Annuaire service-public.fr, Annuaire + Evaluations nationales (IVAL) + Carte scolaire DEPP via data.education.gouv.fr, CNAM via data.ameli.fr (sante), SSMSI via data.gouv.fr (securite), Georisques BRGM/MTE (risques), CNAF data.caf.fr (aide sociale), OFGL data.ofgl.fr (budget communes)_");
   return lines.join("\n");
 }
 

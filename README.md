@@ -1,10 +1,10 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.13.7-blue)
+![Version](https://img.shields.io/badge/version-1.13.8-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-35-blueviolet)
-![Tests](https://img.shields.io/badge/tests-550%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-36-blueviolet)
+![Tests](https://img.shields.io/badge/tests-570%20passing-brightgreen)
 
 Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques), aux textes legaux Legifrance (lois, decrets, codes juridiques, jurisprudence), au Journal Officiel (JORF), aux statistiques d'aide sociale CAF (RSA/APL/AAH) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
@@ -71,13 +71,13 @@ Apres connexion, testez avec une requete simple :
 Recherche : renouveler passeport
 ```
 
-Si les 30 outils sont charges, le serveur est pret.
+Si les 36 outils sont charges, le serveur est pret.
 
-## Les 35 outils MCP (v1.13.7)
+## Les 36 outils MCP (v1.13.8)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
-| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (23 categories) |
+| 1 | `rechercher` | Dispatch unifie | Route automatiquement vers la bonne source selon la requete (31 categories) |
 | 2 | `rechercher_fiche` | DILA / service-public.fr | Recherche plein texte dans ~5 500 fiches pratiques |
 | 3 | `lire_fiche` | DILA / service-public.fr | Lecture complete d'une fiche par identifiant (F14929, N360...) |
 | 4 | `rechercher_service_local` | API Annuaire | Services publics locaux (mairie, prefecture, CAF...) |
@@ -112,6 +112,7 @@ Si les 30 outils sont charges, le serveur est pret.
 | 33 | `rechercher_subvention` | data.gouv.fr Tabular | Subventions collectivites >23 000 EUR — filtre beneficiaire/attribuant/objet/montant/annee |
 | 34 | `consulter_sirene_historique` | API Recherche Entreprises DINUM | Entreprises SIRENE par NAF + zone — etat actif/cesse, dates creation et fermeture |
 | 35 | `rechercher_offre_emploi` | France Travail OAuth2 | Offres d'emploi actives — filtre mots-cles, commune, departement, type contrat, qualification |
+| 36 | `consulter_prix_carburant` | data.economie.gouv.fr | Prix carburants en temps reel par departement ou commune — stations triees par prix croissant, Gazole/SP95/SP98/E10/E85/GPLc, automate 24/24 (MAJ toutes les 10 min) |
 
 ## Exemples d'appels
 
@@ -368,6 +369,7 @@ Cloudflare Workers (plan payant)
 | data.caf.fr (CNAF) | Proxy temps reel | Statistiques allocataires CAF par commune/departement : RSA, APL/ALS/ALF, AAH, AF, prime d'activite... |
 | boamp-datadila.opendatasoft.com (DILA) | Proxy temps reel (Opendatasoft v2.1) | Marches publics BOAMP : appels d'offres, attributions, MAPA, DSP — mise a jour quotidienne |
 | bodacc-datadila.opendatasoft.com (DILA) | Proxy temps reel (Opendatasoft v2.1) | Annonces legales BODACC : immatriculations, radiations, cessions, procedures collectives |
+| data.economie.gouv.fr | Proxy temps reel (Opendatasoft v2.1) | Prix carburants flux instantane : stations-service, prix Gazole/SP95/SP98/E10/E85/GPLc, MAJ toutes les 10 min |
 
 ### Endpoints
 
@@ -387,7 +389,7 @@ Cloudflare Workers (plan payant)
 ```powershell
 npm install
 npm run dev          # Serveur local
-npx vitest run       # Tests unitaires (459 tests)
+npx vitest run       # Tests unitaires (~570 tests)
 npm run typecheck    # Verification TypeScript (0 erreurs)
 npm run deploy       # Deploiement Cloudflare
 ```

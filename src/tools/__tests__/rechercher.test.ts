@@ -870,3 +870,51 @@ describe("classifyQuery -- sirene_historique", () => {
     expect(classifyQuery("combien d'entreprises ouvertes a Lyon")).toBe("sirene_historique");
   });
 });
+
+// T26-T1 -- classifyQuery edge cases Sprint 26
+describe("classifyQuery -- budget_epci (edge case communaute de communes)", () => {
+  it("route les requetes avec nom complet d'EPCI", () => {
+    expect(classifyQuery("budget de la communaute de communes du Pays de Gex")).toBe("budget_epci");
+    expect(classifyQuery("finances communaute de communes du Pays Basque")).toBe("budget_epci");
+  });
+
+  it("ne confond pas avec budget commune", () => {
+    expect(classifyQuery("budget de la commune de Gex")).toBe("budget_commune");
+  });
+});
+
+describe("classifyQuery -- offre_emploi (edge case emplois disponibles)", () => {
+  it("route les requetes emplois disponibles dans un secteur", () => {
+    expect(classifyQuery("emplois disponibles dans le secteur informatique a Lyon")).toBe("offre_emploi");
+    expect(classifyQuery("postes ouverts en comptabilite a Paris")).toBe("offre_emploi");
+    expect(classifyQuery("postes a pourvoir ingenieur Lyon")).toBe("offre_emploi");
+  });
+});
+
+describe("classifyQuery -- sirene_historique (edge case sans mot entreprise)", () => {
+  it("route les requetes metier sans le mot entreprise", () => {
+    expect(classifyQuery("combien de boulangeries creees a Bordeaux en 2023")).toBe("sirene_historique");
+    expect(classifyQuery("pharmacies ouvertes dans le departement 33")).toBe("sirene_historique");
+  });
+});
+
+describe("classifyQuery -- subvention (edge case aides financieres sans le mot subvention)", () => {
+  it("route les requetes aides financieres versees par une collectivite", () => {
+    expect(classifyQuery("quelles aides financieres verse la mairie de Nantes")).toBe("subvention");
+    expect(classifyQuery("aides publiques accordees par la commune de Lyon")).toBe("subvention");
+  });
+});
+
+describe("classifyQuery -- risques_naturels (edge case requete courte)", () => {
+  it("route les requetes courtes avec type de risque", () => {
+    expect(classifyQuery("risque seisme Paris")).toBe("risques_naturels");
+    expect(classifyQuery("risque inondation Lyon")).toBe("risques_naturels");
+  });
+});
+
+describe("classifyQuery -- acces_soins (edge case specialiste abbrege)", () => {
+  it("route les requetes avec abreviation ophtalmo", () => {
+    expect(classifyQuery("combien d'ophtalmos dans le Rhone")).toBe("acces_soins");
+    expect(classifyQuery("combien de medecins a Bordeaux")).toBe("acces_soins");
+  });
+});
