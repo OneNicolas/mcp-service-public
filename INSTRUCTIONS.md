@@ -6,7 +6,7 @@ Serveur MCP (Model Context Protocol) TypeScript sur Cloudflare Workers donnant a
 
 - **Repo** : `OneNicolas/mcp-service-public` (branche `main`)
 - **Production** : `https://mcp-service-public.nhaultcoeur.workers.dev/mcp`
-- **Version actuelle** : v1.13.6
+- **Version actuelle** : v1.13.7
 - **CI/CD** : GitHub → Cloudflare Workers Builds (auto-deploy sur push `main`)
 - **Local** : `C:\\Users\\nhaultcoeur\\OneDrive - Scopi\\Projets\\mcp-service-public`
 
@@ -106,11 +106,11 @@ src/
 4. Ajouter tests dans `src/tools/__tests__/`
 5. Push sur `main` → auto-deploy
 
-## Les 34 outils actuels (v1.13.6)
+## Les 35 outils actuels (v1.13.7)
 
 | # | Outil | Description |
 |---|---|---|
-| 1 | `rechercher` | Dispatch unifie (29 categories : fiches, fiscalite, doctrine, DVF, simulation TF/notaire/IR, zonage ABC, conventions, entreprises, education, IVAL, parcoursup, acces soins, insertion pro, securite, risques naturels, texte_legal, code_juridique, jurisprudence, JORF, aide sociale, marche public, annonce legale, budget commune, subvention, SIRENE, offre emploi) |
+| 1 | `rechercher` | Dispatch unifie (30 categories : fiches, fiscalite, doctrine, DVF, simulation TF/notaire/IR, zonage ABC, conventions, entreprises, education, IVAL, parcoursup, acces soins, insertion pro, securite, risques naturels, texte_legal, code_juridique, jurisprudence, JORF, aide sociale, marche public, annonce legale, budget EPCI, budget commune, subvention, SIRENE, offre emploi) |
 | 2 | `rechercher_fiche` | Fiches pratiques service-public.fr (FTS D1 + fallback LIKE + snippets) |
 | 3 | `lire_fiche` | Lecture complete d'une fiche par ID |
 | 4 | `rechercher_service_local` | Annuaire des services publics locaux |
@@ -140,10 +140,11 @@ src/
 | 28 | `consulter_aide_sociale` | Statistiques CAF par commune ou departement : foyers allocataires RSA/APL/AAH/AF/PA/CF... depuis 2020 (data.caf.fr CNAF) |
 | 29 | `rechercher_marche_public` | Recherche d'avis marches publics dans le BOAMP (appels d'offres, attributions, MAPA, DSP) — filtre type/dept/acheteur/dates (BOAMP DILA Opendatasoft) |
 | 30 | `rechercher_annonce_legale` | Recherche d'annonces legales dans le BODACC (immatriculations, radiations, cessions, procedures collectives) — filtre SIREN/nom/type/dept (BODACC DILA Opendatasoft) |
-| 31 | `consulter_budget_commune` | Budget primitif des communes : recettes/depenses totales, epargne brute/nette, encours de dette, euros/habitant (data.gouv.fr Tabular API — OFGL) |
-| 32 | `rechercher_subvention` | Subventions versees par collectivites et organismes publics (>23 000 EUR) — filtre beneficiaire/attribuant/objet/montant/annee (data.gouv.fr Tabular API) |
-| 33 | `consulter_sirene_historique` | Recherche d'entreprises SIRENE par secteur NAF/APE et zone geographique : etat (actif/cesse), dates creation et fermeture (API Recherche Entreprises DINUM) |
-| 34 | `rechercher_offre_emploi` | Recherche d'offres d'emploi actives via France Travail — filtre mots-cles, commune, departement, type contrat CDI/CDD/interim, qualification cadre/non-cadre |
+| 31 | `consulter_budget_epci` | Budget des EPCI (metropoles, CA, CC, CU) : recettes/depenses, epargne, dette, euros/habitant (OFGL — data.ofgl.fr, 2017-2024) |
+| 32 | `consulter_budget_commune` | Budget primitif des communes : recettes/depenses totales, epargne brute/nette, encours de dette, euros/habitant (data.gouv.fr Tabular API — OFGL) |
+| 33 | `rechercher_subvention` | Subventions versees par collectivites et organismes publics (>23 000 EUR) — filtre beneficiaire/attribuant/objet/montant/annee (data.gouv.fr Tabular API) |
+| 34 | `consulter_sirene_historique` | Recherche d'entreprises SIRENE par secteur NAF/APE et zone geographique : etat (actif/cesse), dates creation et fermeture (API Recherche Entreprises DINUM) |
+| 35 | `rechercher_offre_emploi` | Recherche d'offres d'emploi actives via France Travail — filtre mots-cles, commune, departement, type contrat CDI/CDD/interim, qualification cadre/non-cadre |
 
 ## Historique des sprints
 
@@ -325,6 +326,15 @@ src/
 | T3 | Correction `budgetCommunePatterns` dans `classifyQuery` : ajout patterns "budget primitif/supplementaire/communal/annuel" |
 | T4 | Ajout tests dispatcher dans `rechercher.test.ts` : 3 describes (budget_commune, subvention, sirene_historique) — 14 nouveaux tests |
 | Bump | Version v1.13.6 |
+
+### Sprint 25 — Complete ✅
+| Tache | Description |
+|-------|-------------|
+| T1 | Fix `rechercher_subvention` : suppression filtre `nomAttribuant__contains` (HTTP 400), filtrage client NFD post-fetch, `page_size: 50` quand `attribuant` specifie, message d'erreur enrichi |
+| T3 | Nouveau outil `consulter_budget_epci` (OFGL ofgl-base-gfp 2017-2024) : resolution commune→EPCI via geo.api.gouv.fr, dispatch `budget_epci`, 18 tests classifyQuery |
+| T4 | Disclaimer geographique dans `formatSireneReport` : note siege social SIREN vs etablissements SIRET |
+| T5 | Fix `comparer_communes` DVF : parallelisation `Promise.allSettled`, `timeout: 8_000` par appel, cap arrondissements PLM a 2 |
+| Bump | Version v1.13.7 — 35 outils, 30 categories dispatch, ~550 tests |
 
 ## Contraintes techniques
 

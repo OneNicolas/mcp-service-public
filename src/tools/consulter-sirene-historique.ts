@@ -166,6 +166,9 @@ function formatSireneReport(entreprises: EntrepriseResult[], args: SireneHistori
 
   lines.push(`**Entreprises SIRENE** — ${total.toLocaleString("fr-FR")} resultat(s)${subtitle.length ? ` (${subtitle.join(", ")})` : ""}`);
   lines.push(`Affichage : ${entreprises.length} entreprises`);
+  lines.push("_Note : le filtre geographique porte sur le departement du siege social (SIREN),");
+  lines.push("non sur les etablissements individuels (SIRET). Des entreprises multi-sites dont le");
+  lines.push("siege est hors zone peuvent apparaitre dans les resultats._");
   lines.push("");
 
   // Stats rapides

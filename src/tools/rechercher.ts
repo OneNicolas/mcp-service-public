@@ -25,6 +25,7 @@ import { rechercherTexteLegal } from "./rechercher-texte-legal.js";
 import { rechercherCodeJuridique } from "./rechercher-code-juridique.js";
 import { rechercherJurisprudence } from "./rechercher-jurisprudence.js";
 import { consulterBudgetCommune } from "./consulter-budget-commune.js";
+import { consulterBudgetEpci } from "./consulter-budget-epci.js";
 import { rechercherSubvention } from "./rechercher-subvention.js";
 import { consulterSireneHistorique } from "./consulter-sirene-historique.js";
 import { rechercherOffreEmploi } from "./rechercher-offre-emploi.js";
@@ -60,6 +61,7 @@ export type QueryCategory =
   | "aide_sociale"
   | "marche_public"
   | "annonce_legale"
+  | "budget_epci"
   | "budget_commune"
   | "subvention"
   | "sirene_historique"
@@ -385,6 +387,16 @@ export async function rechercher(
       return prefixResult(result, "\uD83E\uDD1D Aide sociale (statistiques CAF — data.caf.fr)");
     }
 
+    case "budget_epci": {
+      const epciName = query
+        .replace(/\b(budget|finances?|comptes?|depenses?|recettes?)\b/gi, "")
+        .replace(/\b(de|du|des|de\s+la|de\s+l)\b/gi, "")
+        .replace(/\b(epci|intercommunalite|communaute\s+(d.agglomeration|de\s+communes|urbaine)|metropole)\b/gi, "")
+        .trim();
+      const result = await consulterBudgetEpci({ epci: epciName.length >= 3 ? epciName : query });
+      return prefixResult(result, "\uD83E\uDD1D Budget EPCI (OFGL — data.ofgl.fr)");
+    }
+
     case "budget_commune": {
       const communeName = extractCommuneName(query);
       const codePostal = extractCodePostal(query);
@@ -618,6 +630,18 @@ export function classifyQuery(query: string): QueryCategory {
 
   for (const pattern of aideSocialePatterns) {
     if (pattern.test(q)) return "aide_sociale";
+  }
+
+  // T25-T3 -- Patterns budget EPCI (avant budget_commune pour eviter collision)
+  const budgetEpciPatterns = [
+    /\bbudget\b.*\b(epci|intercommunalite|communaute\s+(d.agglomeration|de\s+communes|urbaine)|metropole)\b/,
+    /\b(epci|intercommunalite|communaute\s+(d.agglomeration|de\s+communes|urbaine)|metropole)\b.*\bbudget\b/,
+    /\bfinances?\b.*\b(epci|intercommunalite|metropole|communaute\s+(d.agglomeration|de\s+communes|urbaine))\b/,
+    /\b(epci|intercommunalite|metropole|communaute\s+(d.agglomeration|de\s+communes|urbaine))\b.*\bfinances?\b/,
+    /\bbudget\b.*\bmetropole\b/,
+  ];
+  for (const pattern of budgetEpciPatterns) {
+    if (pattern.test(q)) return "budget_epci";
   }
 
   // T85a -- Patterns budget commune

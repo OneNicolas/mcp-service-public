@@ -82,15 +82,16 @@ export async function rechercherSubvention(args: RechercherSubventionArgs): Prom
   }
 
   try {
-    const params = new URLSearchParams({ page_size: String(Math.min(limit, 50)) });
+    // Quand attribuant est specifie, on fetch plus pour compenser le filtrage client
+    const pageSize = attribuant ? 50 : Math.min(limit, 50);
+    const params = new URLSearchParams({ page_size: String(pageSize) });
 
     // Filtres Tabular API (exact ou contains)
     if (beneficiaire) {
       params.set("nomBeneficiaire__contains", beneficiaire);
     }
-    if (attribuant) {
-      params.set("nomAttribuant__contains", attribuant);
-    }
+    // nomAttribuant n'est pas une colonne indexee dans le dataset SCDL agrege :
+    // le filtre Tabular API provoque HTTP 400. Filtrage applique cote client apres fetch.
     if (objet) {
       params.set("objet__contains", objet);
     }
@@ -117,11 +118,22 @@ export async function rechercherSubvention(args: RechercherSubventionArgs): Prom
     }
 
     const json = (await response.json()) as TabularResponse;
-    const rows = (json.data ?? []).map(parseRow).filter((r) => r.nomBeneficiaire || r.nomAttribuant);
+    const rows = (json.data ?? []).map(parseRow).filter((r) => {
+      if (!r.nomBeneficiaire && !r.nomAttribuant) return false;
+      // Filtrage client NFD sur nomAttribuant (colonne absente des filtres Tabular)
+      if (attribuant) {
+        const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (!norm(r.nomAttribuant).includes(norm(attribuant))) return false;
+      }
+      return true;
+    });
 
     if (rows.length === 0) {
+      const attribuantNote = attribuant
+        ? " Le filtre attribuant est applique localement (colonne non indexee) : essayez un nom plus court ou verifiez l'orthographe."
+        : " Essayez des termes plus generaux.";
       return {
-        content: [{ type: "text", text: "Aucune subvention trouvee pour ces criteres. Essayez des termes plus generaux." }],
+        content: [{ type: "text", text: `Aucune subvention trouvee pour ces criteres.${attribuantNote}` }],
       };
     }
 

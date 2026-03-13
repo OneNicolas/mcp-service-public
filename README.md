@@ -1,10 +1,10 @@
 # mcp-service-public
 
-![Version](https://img.shields.io/badge/version-1.13.6-blue)
+![Version](https://img.shields.io/badge/version-1.13.7-blue)
 ![Cloudflare Workers](https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tools](https://img.shields.io/badge/MCP%20tools-34-blueviolet)
-![Tests](https://img.shields.io/badge/tests-470%20passing-brightgreen)
+![Tools](https://img.shields.io/badge/MCP%20tools-35-blueviolet)
+![Tests](https://img.shields.io/badge/tests-550%20passing-brightgreen)
 
 Serveur MCP (Model Context Protocol) pour les donnees publiques francaises. Donne acces aux fiches pratiques service-public.fr, a la fiscalite locale, aux transactions immobilieres DVF, a la doctrine fiscale BOFiP, au zonage ABC, aux conventions collectives, a la recherche d'entreprises, a l'annuaire des etablissements scolaires, aux resultats des lycees (IVAL), aux evaluations nationales (6eme/CE2), aux formations Parcoursup, a l'acces aux soins (data.ameli.fr), a l'insertion professionnelle (InserJeunes), aux statistiques de securite/delinquance (SSMSI), aux risques naturels (Georisques), aux textes legaux Legifrance (lois, decrets, codes juridiques, jurisprudence), au Journal Officiel (JORF), aux statistiques d'aide sociale CAF (RSA/APL/AAH) et aux simulateurs (taxe fonciere, frais de notaire, impot sur le revenu).
 
@@ -73,7 +73,7 @@ Recherche : renouveler passeport
 
 Si les 30 outils sont charges, le serveur est pret.
 
-## Les 30 outils MCP (v1.11.0)
+## Les 35 outils MCP (v1.13.7)
 
 | # | Outil | Source | Description |
 |---|-------|--------|-------------|
@@ -107,6 +107,11 @@ Si les 30 outils sont charges, le serveur est pret.
 | 28 | `consulter_aide_sociale` | CNAF / data.caf.fr | Statistiques allocataires CAF par commune ou departement : RSA, APL/ALS/ALF, AAH, allocations familiales, prime d'activite... |
 | 29 | `rechercher_marche_public` | DILA / boamp-datadila.opendatasoft.com | Avis marches publics BOAMP : appels d'offres, attributions, MAPA, DSP — filtre type/dept/acheteur/dates |
 | 30 | `rechercher_annonce_legale` | DILA / bodacc-datadila.opendatasoft.com | Annonces legales BODACC : immatriculations, radiations, cessions, procedures collectives — filtre SIREN/nom/type/dept |
+| 31 | `consulter_budget_epci` | OFGL / data.ofgl.fr | Budget des EPCI (metropoles, CA, CC, CU) : recettes/depenses, epargne, dette, euros/habitant — 2017-2024 |
+| 32 | `consulter_budget_commune` | data.gouv.fr Tabular / OFGL | Budget primitif communes : recettes/depenses totales, epargne brute/nette, encours de dette, euros/habitant |
+| 33 | `rechercher_subvention` | data.gouv.fr Tabular | Subventions collectivites >23 000 EUR — filtre beneficiaire/attribuant/objet/montant/annee |
+| 34 | `consulter_sirene_historique` | API Recherche Entreprises DINUM | Entreprises SIRENE par NAF + zone — etat actif/cesse, dates creation et fermeture |
+| 35 | `rechercher_offre_emploi` | France Travail OAuth2 | Offres d'emploi actives — filtre mots-cles, commune, departement, type contrat, qualification |
 
 ## Exemples d'appels
 

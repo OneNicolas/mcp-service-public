@@ -3,7 +3,7 @@
   "name": "io.github.OneNicolas/mcp-service-public",
   "title": "Service Public France",
   "description": "French public services: tax, property, admin, education, healthcare, security, risks, legal texts",
-  "version": "1.13.6",
+  "version": "1.13.7",
   "repository": {
     "url": "https://github.com/OneNicolas/mcp-service-public",
     "source": "github"

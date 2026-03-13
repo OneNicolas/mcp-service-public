@@ -31,6 +31,7 @@ import { rechercherMarchePublic } from "./tools/rechercher-marche-public.js";
 import { rechercherAnnonceLegale } from "./tools/rechercher-annonce-legale.js";
 import { rechercherOffreEmploi } from "./tools/rechercher-offre-emploi.js";
 import { consulterBudgetCommune } from "./tools/consulter-budget-commune.js";
+import { consulterBudgetEpci } from "./tools/consulter-budget-epci.js";
 import { rechercherSubvention } from "./tools/rechercher-subvention.js";
 import { consulterSireneHistorique } from "./tools/consulter-sirene-historique.js";
 import { syncDilaFull } from "./sync/dila-sync.js";
@@ -477,6 +478,20 @@ const TOOLS = [
     },
   },
   {
+    name: "consulter_budget_epci",
+    description:
+      "Consulte les comptes financiers d'un EPCI (metropole, CA, CC, CU) : recettes, depenses, dette. Donnees 2017-2024. Source : OFGL.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        epci: { type: "string", description: "Nom de l'EPCI (ex: 'Bordeaux Metropole', 'Rennes Metropole')" },
+        code_siren: { type: "string", description: "Code SIREN de l'EPCI (9 chiffres)" },
+        commune: { type: "string", description: "Commune membre (l'EPCI sera resolu automatiquement)" },
+        annee: { type: "number", description: "Annee du budget (2017-2024). Par defaut : derniere disponible." },
+      },
+    },
+  },
+  {
     name: "consulter_budget_commune",
     description:
       "Consulte les comptes financiers d'une commune : recettes, depenses, epargne brute, encours de dette, investissements. Donnees 2017-2024. Source : OFGL via data.ofgl.fr.",
@@ -640,6 +655,8 @@ async function executeTool(
       return consulterAideSociale(args as { commune?: string; code_postal?: string; code_insee?: string; code_departement?: string; prestation?: string; annee?: number });
     case "rechercher_marche_public":
       return rechercherMarchePublic(args as { recherche?: string; type_avis?: "AAC" | "APC" | "MAPA" | "DSP"; departement?: string; acheteur?: string; date_debut?: string; date_fin?: string; limit?: number }, env);
+    case "consulter_budget_epci":
+      return consulterBudgetEpci(args as { epci?: string; code_siren?: string; commune?: string; annee?: number });
     case "consulter_budget_commune":
       return consulterBudgetCommune(args as { commune?: string; code_postal?: string; code_insee?: string; annee?: number });
     case "rechercher_subvention":

@@ -806,6 +806,26 @@ describe("extractTypeTexteJorf", () => {
   });
 });
 
+// T25-T3 -- classifyQuery : budget_epci
+describe("classifyQuery -- budget_epci", () => {
+  it("detecte les requetes EPCI par mot-cle direct", () => {
+    expect(classifyQuery("budget EPCI departement 69")).toBe("budget_epci");
+    expect(classifyQuery("budget intercommunalite Rennes")).toBe("budget_epci");
+    expect(classifyQuery("finances de la metropole de Lyon")).toBe("budget_epci");
+    expect(classifyQuery("budget metropole Bordeaux")).toBe("budget_epci");
+  });
+  it("detecte les types de groupements", () => {
+    expect(classifyQuery("budget de Bordeaux Metropole")).toBe("budget_epci");
+    expect(classifyQuery("finances de la communaute de communes")).toBe("budget_epci");
+    expect(classifyQuery("budget communaute d agglomeration Grenoble")).toBe("budget_epci");
+    expect(classifyQuery("budget communaute urbaine de Strasbourg")).toBe("budget_epci");
+  });
+  it("ne capture pas les budgets de communes simples", () => {
+    expect(classifyQuery("budget de la ville de Paris")).toBe("budget_commune");
+    expect(classifyQuery("budget communal de Nantes")).toBe("budget_commune");
+  });
+});
+
 // T85a -- classifyQuery : budget_commune (corrections Sprint 24)
 describe("classifyQuery -- budget_commune", () => {
   it("detecte le budget primitif", () => {

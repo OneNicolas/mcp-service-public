@@ -338,12 +338,13 @@ async function fetchREI(codeInsee: string): Promise<{
 
 async function fetchDvfMedianPrixM2(codeInsee: string, typeLocal: string): Promise<{ medianPrixM2: number; count: number } | null> {
   const arrondissements = PLM_ARRONDISSEMENTS[codeInsee];
-  const codes = arrondissements ? arrondissements.slice(0, 3) : [codeInsee];
+  // Cap a 2 arrondissements PLM pour limiter la charge (Paris: 20->2, Lyon: 9->2, Marseille: 16->2)
+  const codes = arrondissements ? arrondissements.slice(0, 2) : [codeInsee];
   const dateMin = `${new Date().getFullYear() - 2}-01-01`;
-  const allPrixM2: number[] = [];
 
-  for (const code of codes) {
-    try {
+  // Appels paralleles avec timeout individuel de 8s
+  const codeResults = await Promise.allSettled(
+    codes.map(async (code) => {
       const params = new URLSearchParams({
         page: "1", page_size: "100",
         code_commune__exact: code,
@@ -351,28 +352,30 @@ async function fetchDvfMedianPrixM2(codeInsee: string, typeLocal: string): Promi
         type_local__exact: typeLocal,
         date_mutation__greater: dateMin,
       });
-      const response = await cachedFetch(`${TABULAR_API_DVF}?${params}`, { ttl: CACHE_TTL.DVF });
-      if (!response.ok) continue;
+      const response = await cachedFetch(`${TABULAR_API_DVF}?${params}`, { ttl: CACHE_TTL.DVF, timeout: 8_000 });
+      if (!response.ok) return [] as DvfRecord[];
       const data = (await response.json()) as { data: DvfRecord[] };
-      if (!data.data?.length) continue;
+      return data.data ?? ([] as DvfRecord[]);
+    })
+  );
 
-      const byMutation = new Map<string, { prix: number; surface: number }>();
-      for (const rec of data.data) {
-        if (!rec.valeur_fonciere || rec.valeur_fonciere <= 0) continue;
-        if (!rec.surface_reelle_bati || rec.surface_reelle_bati <= 0) continue;
-        const existing = byMutation.get(rec.id_mutation);
-        if (!existing || rec.surface_reelle_bati > existing.surface) {
-          byMutation.set(rec.id_mutation, { prix: rec.valeur_fonciere, surface: rec.surface_reelle_bati });
-        }
-      }
+  const allRecords = codeResults.flatMap((r) => r.status === "fulfilled" ? r.value : []);
 
-      for (const { prix, surface } of byMutation.values()) {
-        const pm2 = prix / surface;
-        if (pm2 >= 200 && pm2 <= 30000) allPrixM2.push(pm2);
-      }
-    } catch {
-      continue;
+  // Dedup par mutation (garder la plus grande surface par id_mutation)
+  const byMutation = new Map<string, { prix: number; surface: number }>();
+  for (const rec of allRecords) {
+    if (!rec.valeur_fonciere || rec.valeur_fonciere <= 0) continue;
+    if (!rec.surface_reelle_bati || rec.surface_reelle_bati <= 0) continue;
+    const existing = byMutation.get(rec.id_mutation);
+    if (!existing || rec.surface_reelle_bati > existing.surface) {
+      byMutation.set(rec.id_mutation, { prix: rec.valeur_fonciere, surface: rec.surface_reelle_bati });
     }
+  }
+
+  const allPrixM2: number[] = [];
+  for (const { prix, surface } of byMutation.values()) {
+    const pm2 = prix / surface;
+    if (pm2 >= 200 && pm2 <= 30000) allPrixM2.push(pm2);
   }
 
   if (allPrixM2.length < 3) return null;
