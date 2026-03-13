@@ -200,8 +200,10 @@ export async function rechercherOffreEmploi(
 
     return { content: [{ type: "text", text: formatOffres(offres, args, total) }] };
   } catch (error) {
+    // Message d'erreur verbeux pour faciliter le diagnostic (auth, scope, réseau)
+    const msg = error instanceof Error ? error.message : String(error);
     return {
-      content: [{ type: "text", text: `Erreur rechercher_offre_emploi : ${error instanceof Error ? error.message : "inconnue"}` }],
+      content: [{ type: "text", text: `[DEBUG] rechercher_offre_emploi : ${msg}` }],
       isError: true,
     };
   }
